@@ -1,0 +1,59 @@
+Act as a Senior Backend Developer. Implement a robust Ordering System and Product Management Logic.
+
+Task: Build the Order Workflow and Game ID Address Book.
+
+1. Product & Inventory Management:
+- Implement logic to handle different product types: 'Direct Top-up' (using Game ID) and 'Digital Codes' (Gift Cards).
+- Create a Stock Management service:
+    * For Digital Codes: Automatically pull a code from the database upon successful purchase and send to user.
+    * For Direct Top-up: Notify Admin to process manually (or via API if enabled).
+- Implement 'Stock Warning': Notify Admin when a product's stock count is below 5 units.
+
+2. Game ID Address Book (User Side):
+- Create an 'AddressBookService' to allow users to save their Game IDs.
+- Fields: id, userId, gameName, gameId, zoneId (optional), nickname (e.g., "My Main Acc").
+- Integration: During the ordering process, ask the user: "Choose from saved IDs or enter a new one?"
+
+3. Order Workflow & Logic:
+- Create an 'OrderWizard' (Scene):
+    a) Selection: Product Category -> Product -> Quantity.
+    b) Validation: Check if User Wallet Balance >= Product Price.
+    c) Input: Fetch Game ID from Address Book or manual input.
+    d) Confirmation: Show Order Summary (Item, Price, ID, Current Balance).
+    e) Execution: 
+        * Deduct Balance from Wallet.
+        * Create Order record with 'Pending' status.
+        * Notify Admin Group with full details and Action Buttons.
+
+4. Admin Order Management:
+- Admin Message Buttons: [✅ Complete], [❌ Cancel & Refund], [💬 Message User].
+- Logic for [Complete]: Update order status to 'Success' and send a Professional Receipt to the user.
+- Logic for [Cancel & Refund]: Update status to 'Cancelled', automatically refund the amount back to the User's Wallet, and notify the user with the reason.
+
+Output: Provide the 'OrderService.js', 'AddressBookService.js', and the Telegraf Order Scene code.
+Act as a Senior Backend Developer and Game Logic Expert. 
+Task: Implement Gamification and Marketing features (Spin Wheel, Gacha, and Flash Sales).
+
+1. Spin Wheel & Gacha System:
+- Create a 'GameService' to handle randomized rewards.
+- Rewards Logic: Define a list of prizes (KS, Mental Coins, VIP Gems, or "Thank You").
+- Probability Engine: Assign a 'Weight' to each prize (e.g., "Thank You" = 70%, "100 Coins" = 25%, "1000 KS" = 5%).
+- Limitation: Users must spend a specific amount of Mental Coins or a "Spin Ticket" to play.
+- Cooldown: Implement a daily limit or cooldown period between spins.
+
+2. Flash Sales Engine (Countdown Timer):
+- Update 'Product' model to include: flashSalePrice, flashSaleStart, flashSaleEnd.
+- Create a 'FlashSaleService' that checks if a product is currently in a sale period.
+- Logic: If current time is within (flashSaleStart, flashSaleEnd), the Bot must display the 'flashSalePrice' and a Countdown Timer (e.g., ⏳ Ends in: 02:45:10).
+- Notification: Automatically send a message to the News Channel when a new Flash Sale starts.
+
+3. Promo Code & Bundle Logic:
+- Create a 'PromoService' to manage discount codes.
+- Fields: code, discountType (Flat/Percentage), value, maxUses, expiryDate, usedBy (Array of IDs).
+- Bundle Logic: Create a "Bundle Category" where buying 2 specific items gives a -5% discount automatically.
+
+4. UI Implementation:
+- Use 'Telegraf Scenes' for the Spin Wheel with a simple animation effect (text-based frames) to show the wheel spinning.
+- Display "🔥 FLASH SALE" labels on product buttons during the active period.
+
+Output: Provide 'GameService.js', 'FlashSaleService.js', and the Spin Wheel Scene with randomized logic.

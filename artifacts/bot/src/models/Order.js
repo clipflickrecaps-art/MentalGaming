@@ -17,7 +17,21 @@ const orderSchema = new mongoose.Schema(
       type: Number,
       required: true,
       min: 0,
-      comment: 'Amount paid in MMK (KS)',
+      comment: 'Final amount paid in KS (after promo)',
+    },
+    originalAmount: {
+      type: Number,
+      default: null,
+      comment: 'Pre-discount amount',
+    },
+    promoCode: {
+      type: String,
+      default: null,
+    },
+    promoDiscount: {
+      type: Number,
+      default: 0,
+      comment: 'KS discount applied',
     },
     status: {
       type: String,
@@ -25,39 +39,26 @@ const orderSchema = new mongoose.Schema(
       default: 'Pending',
       index: true,
     },
-    transactionId: {
+    productType: {
       type: String,
-      default: null,
-      comment: 'Payment gateway or manual transaction reference',
+      enum: ['DirectTopup', 'DigitalCode'],
+      default: 'DirectTopup',
     },
-    screenshotUrl: {
-      type: String,
-      default: null,
-      comment: 'Payment proof screenshot URL (Telegram file_id or hosted URL)',
-    },
-    deliveredData: {
-      type: String,
-      default: null,
-      comment: 'Game code, account credentials, or delivery info (encrypted recommended)',
-    },
-    notes: {
-      type: String,
-      default: '',
-    },
-    processedBy: {
-      type: Number,
-      default: null,
-      comment: 'Admin Telegram ID who processed this order',
-    },
-    timestamp: {
-      type: Date,
-      default: Date.now,
-    },
+
+    // ── Game ID (for DirectTopup) ─────────────────────────────────────────
+    gameId: { type: String, default: null },
+    zoneId: { type: String, default: null },
+    gameName: { type: String, default: null },
+
+    transactionId: { type: String, default: null },
+    deliveredData: { type: String, default: null },
+    notes: { type: String, default: '' },
+    cancelReason: { type: String, default: null },
+    processedBy: { type: Number, default: null },
+    refundTransactionId: { type: String, default: null },
+    timestamp: { type: Date, default: Date.now },
   },
-  {
-    timestamps: true,
-    versionKey: false,
-  }
+  { timestamps: true, versionKey: false }
 );
 
 orderSchema.index({ userId: 1, status: 1 });
