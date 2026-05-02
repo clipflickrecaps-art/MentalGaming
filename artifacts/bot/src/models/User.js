@@ -15,6 +15,12 @@ const userSchema = new mongoose.Schema(
     // ── Spin Wheel ───────────────────────────────────────────────────────────
     lastSpinAt: { type: Date, default: null },
 
+    // ── Daily Check-In ───────────────────────────────────────────────────────
+    checkInStreak:   { type: Number, default: 0, min: 0 },
+    longestStreak:   { type: Number, default: 0, min: 0 },
+    totalCheckIns:   { type: Number, default: 0, min: 0 },
+    lastCheckInDate: { type: String, default: null, comment: 'YYYY-MM-DD in MST' },
+
     // ── Moderation ───────────────────────────────────────────────────────────
     warningsCount:    { type: Number, default: 0, min: 0 },
     restrictedRights: { type: [String], default: [] },
