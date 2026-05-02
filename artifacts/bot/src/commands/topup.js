@@ -5,6 +5,7 @@
 const { Markup } = require('telegraf');
 const { adminOnly } = require('../middlewares/adminCheck');
 const { approveTopup, rejectTopup, getHistory, calcCoinBonus } = require('../services/WalletService');
+const { processFirstTopup } = require('../services/ReferralService');
 const { checklist } = require('../utils/animations');
 const { auditLog } = require('../services/logger');
 const { price, formatDate } = require('../utils/ui');
@@ -72,6 +73,11 @@ module.exports = function registerTopup(bot) {
       const { user, amountKS, bonusCoins } = await approveTopup(txId, ctx.from.id);
 
       await auditLog(ctx.from.id, 'TOPUP_APPROVED', txId, 'Transaction', { amountKS, bonusCoins });
+
+      // ── Process referral bonus on first top-up ──────────────────────────
+      processFirstTopup(user._id, amountKS, ctx.telegram).catch((err) =>
+        console.error('[Topup] Referral processing error:', err.message)
+      );
 
       // Send E-Receipt to customer
       try {

@@ -51,6 +51,7 @@ function loadCommands(bot) {
     'spin.js',
     'promo.js',
     'addressBook.js',
+    'referral.js',
     'support.js',
     'profile.js',
     'settings.js',

@@ -20,6 +20,9 @@ const userSchema = new mongoose.Schema(
     restrictedRights: { type: [String], default: [] },
     isBlocked:        { type: Boolean, default: false },
 
+    // ── Referral ─────────────────────────────────────────────────────────────
+    referralCode: { type: String, default: null, unique: true, sparse: true, index: true },
+
     // ── Preferences ──────────────────────────────────────────────────────────
     theme:      { type: String, enum: ['light', 'dark', 'auto'], default: 'auto' },
     joinDate:   { type: Date, default: Date.now },
