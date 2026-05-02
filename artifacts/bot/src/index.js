@@ -16,6 +16,7 @@ const orderScene       = require('./scenes/orderScene');
 const topupScene       = require('./scenes/topupScene');
 const broadcastScene   = require('./scenes/broadcastScene');
 const spinWheelScene   = require('./scenes/spinWheelScene');
+const supportScene     = require('./scenes/supportScene');
 
 validate();
 
@@ -26,6 +27,7 @@ const stage = new Scenes.Stage([
   topupScene,
   broadcastScene,
   spinWheelScene,
+  supportScene,
 ]);
 
 bot.use(errorHandler());
@@ -82,46 +84,49 @@ function loadCommands(bot) {
 async function registerBotCommands() {
   await bot.telegram.setMyCommands([
     // ── User ──────────────────────────────────────────────────────────────────
-    { command: 'start',        description: '🏠 Main Menu' },
-    { command: 'shop',         description: '🛒 Browse Products' },
-    { command: 'orders',       description: '📦 My Orders' },
-    { command: 'wallet',       description: '💰 My Wallet' },
-    { command: 'topup',        description: '💳 Top Up Wallet' },
-    { command: 'history',      description: '📜 Transaction History' },
-    { command: 'spin',         description: '🎰 Spin Wheel' },
-    { command: 'spininfo',     description: '🎲 Prize Pool Info' },
-    { command: 'promo',        description: '🎟 Check Promo Code' },
-    { command: 'myids',        description: '📖 Saved Game IDs' },
-    { command: 'saveid',       description: '➕ Save a Game ID' },
-    { command: 'deleteid',     description: '🗑 Delete a Game ID' },
-    { command: 'profile',      description: '👤 My Profile' },
-    { command: 'settings',     description: '⚙️ Theme & Settings' },
-    { command: 'support',      description: '💬 Customer Support' },
-    { command: 'help',         description: '❓ Help' },
+    { command: 'start',         description: '🏠 Main Menu' },
+    { command: 'shop',          description: '🛒 Browse Products' },
+    { command: 'orders',        description: '📦 My Orders' },
+    { command: 'wallet',        description: '💰 My Wallet' },
+    { command: 'topup',         description: '💳 Top Up Wallet' },
+    { command: 'history',       description: '📜 Transaction History' },
+    { command: 'spin',          description: '🎰 Spin Wheel' },
+    { command: 'spininfo',      description: '🎲 Prize Pool Info' },
+    { command: 'promo',         description: '🎟 Check Promo Code' },
+    { command: 'myids',         description: '📖 Saved Game IDs' },
+    { command: 'saveid',        description: '➕ Save a Game ID' },
+    { command: 'deleteid',      description: '🗑 Delete a Game ID' },
+    { command: 'support',       description: '💬 AI Customer Support' },
+    { command: 'mytickets',     description: '🎫 My Support Tickets' },
+    { command: 'profile',       description: '👤 My Profile' },
+    { command: 'settings',      description: '⚙️ Theme & Settings' },
+    { command: 'help',          description: '❓ Help' },
     // ── Admin ─────────────────────────────────────────────────────────────────
-    { command: 'admin',        description: '🔧 Admin Panel' },
-    { command: 'dashboard',    description: '📊 Dashboard' },
-    { command: 'broadcast',    description: '📢 Broadcast Message' },
-    { command: 'pendingorders',description: '🟡 Pending Orders' },
-    { command: 'addcodes',     description: '🎁 Add Digital Codes' },
-    { command: 'flashsale',    description: '🔥 Activate Flash Sale' },
-    { command: 'createpromo',  description: '🎟 Create Promo Code' },
-    { command: 'listpromos',   description: '📋 List Promo Codes' },
-    { command: 'deletepromo',  description: '🗑 Deactivate Promo' },
-    { command: 'userinfo',     description: '👤 User Info' },
-    { command: 'users',        description: '👥 User List' },
-    { command: 'ban',          description: '🚫 Ban User' },
-    { command: 'unban',        description: '✅ Unban User' },
-    { command: 'warn',         description: '⚠️ Warn User' },
-    { command: 'unwarn',       description: '✅ Remove Warning' },
-    { command: 'restrict',     description: '🔒 Restrict Rights' },
-    { command: 'unrestrict',   description: '🔓 Remove Restrictions' },
-    { command: 'adjustbal',    description: '💳 Adjust Balance' },
-    { command: 'addpayment',   description: '➕ Add Payment Method' },
-    { command: 'listpayments', description: '💳 Payment Methods' },
-    { command: 'managerates',  description: '💱 Manage Rates' },
-    { command: 'rates',        description: '💹 Current Rates' },
-    { command: 'fetchrates',   description: '🔄 Fetch Live Rates' },
+    { command: 'admin',         description: '🔧 Admin Panel' },
+    { command: 'dashboard',     description: '📊 Dashboard' },
+    { command: 'broadcast',     description: '📢 Broadcast Message' },
+    { command: 'tickets',       description: '🎫 Support Tickets' },
+    { command: 'closeticket',   description: '⚫ Close a Ticket' },
+    { command: 'pendingorders', description: '🟡 Pending Orders' },
+    { command: 'addcodes',      description: '🎁 Add Digital Codes' },
+    { command: 'flashsale',     description: '🔥 Activate Flash Sale' },
+    { command: 'createpromo',   description: '🎟 Create Promo Code' },
+    { command: 'listpromos',    description: '📋 List Promo Codes' },
+    { command: 'deletepromo',   description: '🗑 Deactivate Promo' },
+    { command: 'userinfo',      description: '👤 User Info' },
+    { command: 'users',         description: '👥 User List' },
+    { command: 'ban',           description: '🚫 Ban User' },
+    { command: 'unban',         description: '✅ Unban User' },
+    { command: 'warn',          description: '⚠️ Warn User' },
+    { command: 'unwarn',        description: '✅ Remove Warning' },
+    { command: 'restrict',      description: '🔒 Restrict Rights' },
+    { command: 'unrestrict',    description: '🔓 Remove Restrictions' },
+    { command: 'adjustbal',     description: '💳 Adjust Balance' },
+    { command: 'addpayment',    description: '➕ Add Payment Method' },
+    { command: 'listpayments',  description: '💳 Payment Methods' },
+    { command: 'managerates',   description: '💱 Manage Rates' },
+    { command: 'rates',         description: '💹 Current Rates' },
+    { command: 'fetchrates',    description: '🔄 Fetch Live Rates' },
   ]);
   console.log('[Bot] ✅ Command menu registered');
 }
@@ -132,7 +137,7 @@ async function bootstrap() {
   await connectDB();
   loadCommands(bot);
 
-  // Start flash sale watcher (checks every 60s for new sales to announce)
+  // Flash sale watcher — every 60s
   const { startFlashSaleWatcher } = require('./services/FlashSaleService');
   startFlashSaleWatcher(bot.telegram);
   console.log('[Bot] ✅ Flash sale watcher started');
