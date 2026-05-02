@@ -63,7 +63,6 @@ const promoSchema = new mongoose.Schema(
   { timestamps: true, versionKey: false }
 );
 
-promoSchema.index({ code: 1 });
 promoSchema.index({ isActive: 1, expiryDate: 1 });
 
 promoSchema.methods.isValid = function () {
