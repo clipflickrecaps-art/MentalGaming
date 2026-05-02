@@ -1,6 +1,6 @@
 require('dotenv').config();
 
-const { Telegraf } = require('telegraf');
+const { Telegraf, Scenes, session } = require('telegraf');
 const path = require('path');
 const fs = require('fs');
 
@@ -10,12 +10,18 @@ const { attachUser } = require('./middlewares/authUser');
 const { antiSpam } = require('./middlewares/antiSpam');
 const { errorHandler } = require('./middlewares/errorHandler');
 
+const rateManagerScene = require('./scenes/rateManagerScene');
+
 validate();
 
 const bot = new Telegraf(config.bot.token);
 
+const stage = new Scenes.Stage([rateManagerScene]);
+
 bot.use(errorHandler());
 bot.use(antiSpam());
+bot.use(session());
+bot.use(stage.middleware());
 bot.use(attachUser());
 
 function loadCommands(bot) {
@@ -30,12 +36,24 @@ function loadCommands(bot) {
         register(bot);
         console.log(`[Commands] Loaded: ${file}`);
       } else {
-        console.warn(`[Commands] Skipped (no default export function): ${file}`);
+        console.warn(`[Commands] Skipped (no default export): ${file}`);
       }
     } catch (err) {
       console.error(`[Commands] Failed to load ${file}:`, err.message);
     }
   }
+}
+
+async function registerBotCommands(bot) {
+  await bot.telegram.setMyCommands([
+    { command: 'start', description: 'Main Menu' },
+    { command: 'help', description: 'Help & Commands' },
+    { command: 'admin', description: 'Admin Panel' },
+    { command: 'managerates', description: 'Manage Exchange Rates' },
+    { command: 'rates', description: 'View Current Rates' },
+    { command: 'fetchrates', description: 'Fetch Live Rates from API' },
+  ]);
+  console.log('[Bot] Telegram commands menu registered');
 }
 
 async function bootstrap() {
@@ -45,25 +63,20 @@ async function bootstrap() {
 
   loadCommands(bot);
 
-  bot.on('message', async (ctx, next) => {
-    if (ctx.message.text && !ctx.message.text.startsWith('/')) {
-      return next();
-    }
-  });
-
-  process.on('SIGINT', async () => {
+  process.on('SIGINT', () => {
     console.log('[Bot] Shutting down...');
     bot.stop('SIGINT');
     process.exit(0);
   });
 
-  process.on('SIGTERM', async () => {
+  process.on('SIGTERM', () => {
     console.log('[Bot] Shutting down...');
     bot.stop('SIGTERM');
     process.exit(0);
   });
 
   await bot.launch();
+  await registerBotCommands(bot);
   console.log(`[Bot] Mental Gaming Store Bot is running! @${bot.botInfo?.username || 'unknown'}`);
 }
 
