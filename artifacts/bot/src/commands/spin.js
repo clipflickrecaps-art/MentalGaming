@@ -1,4 +1,5 @@
 const { adminOnly } = require('../middlewares/adminCheck');
+const { checkRestrictions } = require('../middlewares/checkRestrictions');
 const { canFreeSpinToday, nextFreeSpinIn, PRIZE_POOL, SPIN_COST_COINS } = require('../services/GameService');
 const { formatCountdown } = require('../services/FlashSaleService');
 const { price } = require('../utils/ui');
@@ -6,11 +7,11 @@ const User = require('../models/User');
 
 module.exports = function registerSpin(bot) {
 
-  bot.command('spin', async (ctx) => {
+  bot.command('spin', checkRestrictions('spin'), async (ctx) => {
     await ctx.scene.enter('spin_wheel_scene');
   });
 
-  bot.hears('🎰 Spin Wheel', async (ctx) => {
+  bot.hears('🎰 Spin Wheel', checkRestrictions('spin'), async (ctx) => {
     await ctx.scene.enter('spin_wheel_scene');
   });
 

@@ -22,9 +22,11 @@ const userSchema = new mongoose.Schema(
     lastCheckInDate: { type: String, default: null, comment: 'YYYY-MM-DD in MST' },
 
     // ── Moderation ───────────────────────────────────────────────────────────
-    warningsCount:    { type: Number, default: 0, min: 0 },
-    restrictedRights: { type: [String], default: [] },
-    isBlocked:        { type: Boolean, default: false },
+    warningsCount:     { type: Number, default: 0, min: 0 },
+    restrictedRights:  { type: [String], default: [] },
+    restrictedUntil:   { type: Date, default: null },
+    restrictionReason: { type: String, default: null },
+    isBlocked:         { type: Boolean, default: false },
 
     // ── Referral ─────────────────────────────────────────────────────────────
     referralCode: { type: String, default: null, unique: true, sparse: true, index: true },
@@ -49,9 +51,9 @@ userSchema.methods.hasRight = function (right) {
  */
 userSchema.methods.recalcTier = function () {
   const d = this.totalDeposited || 0;
-  if (d >= 200000)     this.membershipTier = 'Platinum';
-  else if (d >= 50000) this.membershipTier = 'Gold';
-  else                 this.membershipTier = 'Silver';
+  if (d >= 2_000_000)   this.membershipTier = 'Platinum';
+  else if (d >= 500_000) this.membershipTier = 'Gold';
+  else                   this.membershipTier = 'Silver';
 };
 
 userSchema.statics.findByTelegramId = function (telegramId) {

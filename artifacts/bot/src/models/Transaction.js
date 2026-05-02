@@ -53,6 +53,12 @@ const transactionSchema = new mongoose.Schema(
       default: null,
       comment: 'Telegram file_id of payment screenshot',
     },
+    screenshotHash: {
+      type: String,
+      default: null,
+      index: true,
+      comment: 'MD5 of file_id — used for duplicate screenshot detection',
+    },
     note: {
       type: String,
       default: '',

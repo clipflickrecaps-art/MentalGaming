@@ -16,6 +16,7 @@ const {
   getMSTToday,
   MILESTONES,
 } = require('../services/CheckInService');
+const { checkRestrictions } = require('../middlewares/checkRestrictions');
 const { price } = require('../utils/ui');
 const User = require('../models/User');
 
@@ -84,11 +85,11 @@ function buildResultText(result) {
 module.exports = function registerCheckIn(bot) {
 
   // ── /checkin ────────────────────────────────────────────────────────────────
-  bot.command('checkin', async (ctx) => {
+  bot.command('checkin', checkRestrictions('checkin'), async (ctx) => {
     await handleCheckIn(ctx);
   });
 
-  bot.hears(['🗓 Check In', '✅ Check In', 'checkin'], async (ctx) => {
+  bot.hears(['🗓 Check In', '✅ Check In', 'checkin'], checkRestrictions('checkin'), async (ctx) => {
     await handleCheckIn(ctx);
   });
 

@@ -14,6 +14,7 @@ const { createPendingTopup, calcCoinBonus, COIN_BONUS_RATE } = require('../servi
 const { checklist, loadingMessage } = require('../utils/animations');
 const { buildMessage, price } = require('../utils/ui');
 const { auditLog } = require('../services/logger');
+const { checkDuplicateScreenshot, notifyAdminFraud } = require('../utils/imageHash');
 const PaymentMethod = require('../models/PaymentMethod');
 const Transaction = require('../models/Transaction');
 const User = require('../models/User');
@@ -184,6 +185,29 @@ const topupScene = new Scenes.WizardScene(
     try {
       const user = await User.findByTelegramId(ctx.from.id);
 
+      // ── Duplicate screenshot fraud check ─────────────────────────────────
+      const dupCheck = await checkDuplicateScreenshot(fileId, user._id);
+      if (dupCheck.isFraud) {
+        await notifyAdminFraud(ctx.telegram, user, dupCheck.existingTx, dupCheck.hash);
+        await ctx.telegram.editMessageText(
+          ref.chatId, ref.messageId, undefined,
+          `🚨 *Fraud Detected!*\n\n` +
+          `This screenshot has already been used for a previous top-up request.\n\n` +
+          `⛔ Your submission has been blocked and admin has been notified.\n` +
+          `_If you believe this is a mistake, please contact /support._`,
+          { parse_mode: 'Markdown' }
+        ).catch(() => {});
+        return ctx.scene.leave();
+      }
+      if (dupCheck.isDuplicate) {
+        await ctx.telegram.editMessageText(
+          ref.chatId, ref.messageId, undefined,
+          `⚠️ *Duplicate Screenshot*\n\nYou have already submitted this screenshot.\nPlease upload a new payment screenshot.`,
+          { parse_mode: 'Markdown' }
+        ).catch(() => {});
+        return;
+      }
+
       await checklist(ctx, ref,
         [
           { label: 'Receiving screenshot',      delay: 600 },
@@ -202,6 +226,7 @@ const topupScene = new Scenes.WizardScene(
         amountKS: amount,
         paymentMethod: method.shortCode,
         screenshotUrl: fileId,
+        screenshotHash: dupCheck.hash,
       });
 
       await auditLog(ctx.from.id, 'TOPUP_REQUESTED', txId, 'Transaction', {

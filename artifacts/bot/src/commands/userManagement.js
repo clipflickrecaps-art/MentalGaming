@@ -16,6 +16,7 @@ const {
   getUserInfo, listUsers, searchUsers,
   adjustBalance, resolveUser, ALL_RIGHTS,
 } = require('../services/UserManagementService');
+const { issueWarning, getUserLog } = require('../services/PenaltyService');
 const { auditLog } = require('../services/logger');
 const { price, formatDate } = require('../utils/ui');
 const { getTheme } = require('../services/ThemeService');
@@ -355,6 +356,113 @@ module.exports = function registerUserManagement(bot) {
       `💳 Adjust balance for \`${uid}\`\nSend amount with sign (e.g. \`+5000\` or \`-2000\`):`,
       { parse_mode: 'Markdown', ...Markup.forceReply() }
     );
+  });
+
+  // ── /penalize — smart warning with auto time-restriction + coin penalty ───
+  bot.command('penalize', adminOnly(), async (ctx) => {
+    const target = parseTarget(ctx);
+    if (!target) return ctx.reply(
+      'Usage: /penalize @username reason\nOr reply to a user\'s message + /penalize reason\n\n' +
+      'Effects:\n  1st: 3-day Spin+CheckIn ban\n  2nd: 7-day all-rewards ban + 10% coin penalty\n  3rd: Permanent ban'
+    );
+
+    const reason = target.args?.join(' ') || 'Admin penalty';
+    try {
+      const result = await issueWarning(target.identifier, ctx.from.id, reason, ctx.telegram);
+      const { user, autoBanned, level, coinPenalty, expiresAt } = result;
+
+      const durationText = expiresAt
+        ? `until *${expiresAt.toLocaleDateString('en-GB')}*`
+        : autoBanned ? '🚫 *Permanently Banned*' : '';
+
+      const penaltyLine = coinPenalty > 0 ? `\n🪙 Coin Penalty: *-${coinPenalty.toLocaleString()} MC*` : '';
+
+      await ctx.reply(
+        `⚠️ *Penalty Issued (Warning ${level}/3)*\n\n` +
+        `🆔 \`${user.telegramId}\`\n` +
+        `📝 Reason: ${reason}${penaltyLine}\n` +
+        `⏳ Restricted: ${durationText}\n` +
+        `🔒 Rights removed: ${user.restrictedRights.join(', ') || 'none'}\n` +
+        (autoBanned ? '\n🚫 *Auto-banned after 3 warnings.*' : ''),
+        { parse_mode: 'Markdown' }
+      );
+    } catch (err) {
+      await ctx.reply(`❌ ${err.message}`);
+    }
+  });
+
+  // ── /userlog — full activity log for a user ────────────────────────────────
+  bot.command('userlog', adminOnly(), async (ctx) => {
+    const target = parseTarget(ctx);
+    if (!target) return ctx.reply('Usage: /userlog @username\nOr reply to a user\'s message');
+
+    const info = await getUserInfo(target.identifier);
+    if (!info) return ctx.reply(`❌ User not found: ${target.display}`);
+
+    const log = await getUserLog(info.user.telegramId);
+    if (!log) return ctx.reply('❌ Could not load log.');
+
+    const { user, orders, transactions, tickets } = log;
+    const tag = user.username ? `@${user.username}` : `ID:${user.telegramId}`;
+
+    const orderLines = orders.length
+      ? orders.map((o) => `  • #${o.orderId} — ${o.productId?.name || 'Product'} — ${o.status}`).join('\n')
+      : '  None';
+
+    const txLines = transactions.length
+      ? transactions.map((t) =>
+          `  • ${t.type} ${t.amount > 0 ? '+' : ''}${t.amount.toLocaleString()} ${t.wallet} — ${t.status}`
+        ).join('\n')
+      : '  None';
+
+    const ticketLines = tickets.length
+      ? tickets.map((t) => `  • [${t.status}] ${t.issue?.slice(0, 40)}...`).join('\n')
+      : '  None';
+
+    await ctx.reply(
+      `📋 *Activity Log — ${tag}*\n` +
+      `──────────────────\n` +
+      `⚠️ Warnings: *${user.warningsCount}/3*\n` +
+      `🔒 Restricted: ${user.restrictedRights.length ? user.restrictedRights.join(', ') : 'None'}\n` +
+      `⏳ Until: ${user.restrictedUntil ? formatDate(user.restrictedUntil) : 'N/A'}\n` +
+      `📝 Reason: ${user.restrictionReason || '—'}\n` +
+      `🚫 Blocked: ${user.isBlocked ? 'YES' : 'No'}\n` +
+      `──────────────────\n` +
+      `*Recent Orders (last 5):*\n${orderLines}\n` +
+      `──────────────────\n` +
+      `*Recent Transactions (last 5):*\n${txLines}\n` +
+      `──────────────────\n` +
+      `*Support Tickets (last 3):*\n${ticketLines}`,
+      { parse_mode: 'Markdown' }
+    );
+  });
+
+  // ── /block and /unblock — explicit aliases for ban/unban ──────────────────
+  bot.command('block', adminOnly(), async (ctx) => {
+    const target = parseTarget(ctx);
+    if (!target) return ctx.reply('Usage: /block @username reason');
+    const reason = target.args?.join(' ') || 'Manual block by admin';
+    try {
+      const user = await banUser(target.identifier, ctx.from.id, reason);
+      await ctx.reply(`🚫 *Blocked*\n\n\`${user.telegramId}\`\n📝 ${reason}`, { parse_mode: 'Markdown' });
+      await ctx.telegram.sendMessage(user.telegramId,
+        `🚫 *Your account has been blocked.*\n\n📝 Reason: ${reason}\n_Contact /support to appeal._`,
+        { parse_mode: 'Markdown' }
+      ).catch(() => {});
+    } catch (err) { await ctx.reply(`❌ ${err.message}`); }
+  });
+
+  bot.command('unblock', adminOnly(), async (ctx) => {
+    const target = parseTarget(ctx);
+    if (!target) return ctx.reply('Usage: /unblock @username');
+    try {
+      const user = await unbanUser(target.identifier, ctx.from.id);
+      await ctx.reply(`✅ *Unblocked*\n\n\`${user.telegramId}\``, { parse_mode: 'Markdown' });
+      await ctx.telegram.sendMessage(user.telegramId,
+        `✅ *Your account has been restored.*\nWelcome back to Mental Gaming Store! 🎮`,
+        { parse_mode: 'Markdown' }
+      ).catch(() => {});
+    } catch (err) { await ctx.reply(`❌ ${err.message}`); }
   });
 
   // ── Session text handler for inline actions ────────────────────────────────
