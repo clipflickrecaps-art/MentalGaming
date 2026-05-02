@@ -69,7 +69,7 @@ function ordersKeyboard(page, totalPages, filter, orderRows) {
     ...orderRows,
   ];
   if (navBtns.length) rows.push(navBtns);
-  rows.push([Nav.backButton('🔙 Main Menu')]);
+  rows.push(Nav.backButton('🔙 Main Menu'));
 
   return Markup.inlineKeyboard(rows);
 }
@@ -93,7 +93,7 @@ Nav.register({
         }]),
         keyboard: Markup.inlineKeyboard([
           [Markup.button.callback('🛒 Go to Shop', 'nav:go:shop')],
-          [Nav.backButton('🔙 Main Menu')],
+          Nav.backButton('🔙 Main Menu'),
         ]),
       };
     }
@@ -256,7 +256,7 @@ module.exports = function registerOrders(bot) {
       if (order.status === 'Success' && order.deliveredData) {
         buttons.push([Markup.button.callback('📋 Copy Code', `order_copy_code:${orderId}`)]);
       }
-      buttons.push([Nav.backButton('🔙 My Orders')]);
+      buttons.push(Nav.backButton('🔙 My Orders'));
 
       await ctx.reply(text, {
         parse_mode: 'Markdown',

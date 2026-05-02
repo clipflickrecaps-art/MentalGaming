@@ -5,7 +5,7 @@ function attachUser() {
     if (!ctx.from) return next();
 
     try {
-      const user = await User.findOrCreate(ctx.from.id, ctx.from.username);
+      const user = await User.findOrCreate(ctx.from.id, ctx.from.username, ctx.from.first_name);
 
       if (user.isBlocked) {
         return ctx.reply('🚫 Your account has been suspended. Contact support.');

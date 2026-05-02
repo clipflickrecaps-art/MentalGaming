@@ -2,8 +2,9 @@ const mongoose = require('mongoose');
 
 const userSchema = new mongoose.Schema(
   {
-    telegramId: { type: Number, required: true, unique: true, index: true },
-    username: { type: String, default: null },
+    telegramId: { type: Number, required: true, unique: true },
+    username:   { type: String, default: null },
+    first_name: { type: String, default: null },
 
     // ── Dual Wallet ──────────────────────────────────────────────────────────
     balanceKS:      { type: Number, default: 0, min: 0 },
@@ -19,7 +20,7 @@ const userSchema = new mongoose.Schema(
     checkInStreak:   { type: Number, default: 0, min: 0 },
     longestStreak:   { type: Number, default: 0, min: 0 },
     totalCheckIns:   { type: Number, default: 0, min: 0 },
-    lastCheckInDate: { type: String, default: null, comment: 'YYYY-MM-DD in MST' },
+    lastCheckInDate: { type: String, default: null },
 
     // ── Moderation ───────────────────────────────────────────────────────────
     warningsCount:     { type: Number, default: 0, min: 0 },
@@ -28,8 +29,8 @@ const userSchema = new mongoose.Schema(
     restrictionReason: { type: String, default: null },
     isBlocked:         { type: Boolean, default: false },
 
-    // ── Referral ─────────────────────────────────────────────────────────────
-    referralCode: { type: String, default: null, unique: true, sparse: true, index: true },
+    // ── Referral (index declared below via schema.index, not inline) ─────────
+    referralCode: { type: String, default: null },
 
     // ── Preferences ──────────────────────────────────────────────────────────
     theme:      { type: String, enum: ['light', 'dark', 'auto'], default: 'auto' },
@@ -39,19 +40,16 @@ const userSchema = new mongoose.Schema(
   { timestamps: true, versionKey: false }
 );
 
+// ── Indexes (single declaration per field to avoid Mongoose duplicate warnings)
+userSchema.index({ referralCode: 1 }, { unique: true, sparse: true });
+
 userSchema.methods.hasRight = function (right) {
   return !this.restrictedRights.includes(right);
 };
 
-/**
- * Auto-upgrade tier based on totalDeposited:
- *   Silver  <  50,000 KS
- *   Gold    50,000 – 199,999 KS
- *   Platinum ≥ 200,000 KS
- */
 userSchema.methods.recalcTier = function () {
   const d = this.totalDeposited || 0;
-  if (d >= 2_000_000)   this.membershipTier = 'Platinum';
+  if (d >= 2_000_000)    this.membershipTier = 'Platinum';
   else if (d >= 500_000) this.membershipTier = 'Gold';
   else                   this.membershipTier = 'Silver';
 };
@@ -60,16 +58,21 @@ userSchema.statics.findByTelegramId = function (telegramId) {
   return this.findOne({ telegramId });
 };
 
-userSchema.statics.findOrCreate = async function (telegramId, username) {
-  let user = await this.findOne({ telegramId });
-  if (!user) {
-    user = await this.create({ telegramId, username });
-  } else {
-    user.lastActive = new Date();
-    if (username && user.username !== username) user.username = username;
-    await user.save();
+userSchema.statics.findOrCreate = async function (telegramId, username, firstName) {
+  try {
+    const setFields = { lastActive: new Date() };
+    if (username)  setFields.username   = username;
+    if (firstName) setFields.first_name = firstName;
+
+    return await this.findOneAndUpdate(
+      { telegramId },
+      { $setOnInsert: { telegramId }, $set: setFields },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+  } catch (err) {
+    if (err.code === 11000) return this.findOne({ telegramId });
+    throw err;
   }
-  return user;
 };
 
 module.exports = mongoose.model('User', userSchema);
