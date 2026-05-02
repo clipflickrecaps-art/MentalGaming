@@ -10,10 +10,10 @@ function mainMenuKeyboard() {
 
 function adminMenuKeyboard() {
   return Markup.keyboard([
-    ['📊 Dashboard', '📦 Manage Orders'],
+    ['📊 Dashboard',      '📦 Manage Orders'],
     ['🛍️ Manage Products', '👥 Manage Users'],
-    ['💱 Manage Rates', '📋 Audit Logs'],
-    ['🔙 Back to Main'],
+    ['💱 Manage Rates',   '📢 Broadcast'],
+    ['📋 Audit Logs',     '🔙 Back to Main'],
   ]).resize();
 }
 
@@ -42,10 +42,30 @@ function rateActionKeyboard(currency, affectedCount) {
   return Markup.inlineKeyboard(rows);
 }
 
+function userActionKeyboard(telegramId, isBlocked) {
+  return Markup.inlineKeyboard([
+    [
+      Markup.button.callback('⚠️ Warn',  `um_warn:${telegramId}`),
+      Markup.button.callback('✅ Unwarn', `um_unwarn:${telegramId}`),
+    ],
+    [
+      Markup.button.callback(isBlocked ? '✅ Unban' : '🚫 Ban', isBlocked ? `um_unban:${telegramId}` : `um_ban:${telegramId}`),
+    ],
+    [
+      Markup.button.callback('🔒 Restrict Order', `um_restrict:${telegramId}:order`),
+      Markup.button.callback('🔓 Remove All',      `um_unrestrict:${telegramId}:all`),
+    ],
+    [
+      Markup.button.callback('💳 Adjust Balance', `um_adjust:${telegramId}`),
+    ],
+  ]);
+}
+
 module.exports = {
   mainMenuKeyboard,
   adminMenuKeyboard,
   confirmKeyboard,
   paginationKeyboard,
   rateActionKeyboard,
+  userActionKeyboard,
 };

@@ -2,23 +2,24 @@ require('dotenv').config();
 
 const { Telegraf, Scenes, session } = require('telegraf');
 const path = require('path');
-const fs = require('fs');
+const fs   = require('fs');
 
-const { config, validate } = require('../config/settings');
-const { connectDB } = require('./database');
-const { attachUser } = require('./middlewares/authUser');
-const { antiSpam } = require('./middlewares/antiSpam');
-const { errorHandler } = require('./middlewares/errorHandler');
-const { navigationMiddleware } = require('./middlewares/navigationMiddleware');
+const { config, validate }       = require('../config/settings');
+const { connectDB }              = require('./database');
+const { attachUser }             = require('./middlewares/authUser');
+const { antiSpam }               = require('./middlewares/antiSpam');
+const { errorHandler }           = require('./middlewares/errorHandler');
+const { navigationMiddleware }   = require('./middlewares/navigationMiddleware');
 
-const rateManagerScene = require('./scenes/rateManagerScene');
-const orderScene       = require('./scenes/orderScene');
-const topupScene       = require('./scenes/topupScene');
+const rateManagerScene  = require('./scenes/rateManagerScene');
+const orderScene        = require('./scenes/orderScene');
+const topupScene        = require('./scenes/topupScene');
+const broadcastScene    = require('./scenes/broadcastScene');
 
 validate();
 
-const bot = new Telegraf(config.bot.token);
-const stage = new Scenes.Stage([rateManagerScene, orderScene, topupScene]);
+const bot   = new Telegraf(config.bot.token);
+const stage = new Scenes.Stage([rateManagerScene, orderScene, topupScene, broadcastScene]);
 
 bot.use(errorHandler());
 bot.use(antiSpam());
@@ -43,6 +44,7 @@ function loadCommands(bot) {
     'settings.js',
     'dashboard.js',
     'adminOrders.js',
+    'userManagement.js',
     'admin.js',
     'help.js',
   ];
@@ -70,24 +72,36 @@ function loadCommands(bot) {
 
 async function registerBotCommands() {
   await bot.telegram.setMyCommands([
-    { command: 'start',          description: '🏠 Main Menu' },
-    { command: 'shop',           description: '🛒 Browse Products' },
-    { command: 'orders',         description: '📦 My Orders' },
-    { command: 'wallet',         description: '💰 My Wallet' },
-    { command: 'topup',          description: '💳 Top Up Wallet' },
-    { command: 'history',        description: '📜 Transaction History' },
-    { command: 'profile',        description: '👤 My Profile' },
-    { command: 'settings',       description: '⚙️ Theme & Settings' },
-    { command: 'support',        description: '💬 Customer Support' },
-    { command: 'help',           description: '❓ Help' },
-    { command: 'admin',          description: '🔧 Admin Panel' },
-    { command: 'dashboard',      description: '📊 Admin Dashboard' },
-    { command: 'pendingorders',  description: '🟡 Pending Orders' },
-    { command: 'addpayment',     description: '➕ Add Payment Method' },
-    { command: 'listpayments',   description: '💳 List Payment Methods' },
-    { command: 'managerates',    description: '💱 Manage Exchange Rates' },
-    { command: 'rates',          description: '💹 Current Rates' },
-    { command: 'fetchrates',     description: '🔄 Fetch Live Rates' },
+    // User
+    { command: 'start',         description: '🏠 Main Menu' },
+    { command: 'shop',          description: '🛒 Browse Products' },
+    { command: 'orders',        description: '📦 My Orders' },
+    { command: 'wallet',        description: '💰 My Wallet' },
+    { command: 'topup',         description: '💳 Top Up Wallet' },
+    { command: 'history',       description: '📜 Transaction History' },
+    { command: 'profile',       description: '👤 My Profile' },
+    { command: 'settings',      description: '⚙️ Theme & Settings' },
+    { command: 'support',       description: '💬 Customer Support' },
+    { command: 'help',          description: '❓ Help' },
+    // Admin
+    { command: 'admin',         description: '🔧 Admin Panel' },
+    { command: 'dashboard',     description: '📊 Dashboard' },
+    { command: 'broadcast',     description: '📢 Broadcast Message' },
+    { command: 'pendingorders', description: '🟡 Pending Orders' },
+    { command: 'userinfo',      description: '👤 User Info' },
+    { command: 'users',         description: '👥 User List' },
+    { command: 'ban',           description: '🚫 Ban User' },
+    { command: 'unban',         description: '✅ Unban User' },
+    { command: 'warn',          description: '⚠️ Warn User' },
+    { command: 'unwarn',        description: '✅ Remove Warning' },
+    { command: 'restrict',      description: '🔒 Restrict User Rights' },
+    { command: 'unrestrict',    description: '🔓 Remove Restrictions' },
+    { command: 'adjustbal',     description: '💳 Adjust User Balance' },
+    { command: 'addpayment',    description: '➕ Add Payment Method' },
+    { command: 'listpayments',  description: '💳 List Payment Methods' },
+    { command: 'managerates',   description: '💱 Manage Exchange Rates' },
+    { command: 'rates',         description: '💹 Current Rates' },
+    { command: 'fetchrates',    description: '🔄 Fetch Live Rates' },
   ]);
   console.log('[Bot] ✅ Telegram command menu registered');
 }
