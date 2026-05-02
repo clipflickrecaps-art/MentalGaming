@@ -9,6 +9,7 @@ const { connectDB } = require('./database');
 const { attachUser } = require('./middlewares/authUser');
 const { antiSpam } = require('./middlewares/antiSpam');
 const { errorHandler } = require('./middlewares/errorHandler');
+const { navigationMiddleware } = require('./middlewares/navigationMiddleware');
 
 const rateManagerScene = require('./scenes/rateManagerScene');
 
@@ -24,11 +25,19 @@ bot.use(session());
 bot.use(stage.middleware());
 bot.use(attachUser());
 
+navigationMiddleware(bot);
+
 function loadCommands(bot) {
   const commandsDir = path.join(__dirname, 'commands');
   const files = fs.readdirSync(commandsDir).filter((f) => f.endsWith('.js'));
 
-  for (const file of files) {
+  const ORDER = ['start.js', 'shop.js', 'profile.js', 'settings.js', 'dashboard.js', 'admin.js', 'help.js'];
+  const sorted = [
+    ...ORDER.filter((f) => files.includes(f)),
+    ...files.filter((f) => !ORDER.includes(f)),
+  ];
+
+  for (const file of sorted) {
     const commandPath = path.join(commandsDir, file);
     try {
       const register = require(commandPath);
@@ -44,16 +53,21 @@ function loadCommands(bot) {
   }
 }
 
-async function registerBotCommands(bot) {
+async function registerBotCommands() {
   await bot.telegram.setMyCommands([
-    { command: 'start', description: 'Main Menu' },
-    { command: 'help', description: 'Help & Commands' },
-    { command: 'admin', description: 'Admin Panel' },
-    { command: 'managerates', description: 'Manage Exchange Rates' },
-    { command: 'rates', description: 'View Current Rates' },
-    { command: 'fetchrates', description: 'Fetch Live Rates from API' },
+    { command: 'start',       description: '🏠 Main Menu' },
+    { command: 'shop',        description: '🛒 Browse Products' },
+    { command: 'menu',        description: '📋 Navigation Menu' },
+    { command: 'profile',     description: '👤 My Profile' },
+    { command: 'settings',    description: '⚙️ Theme & Settings' },
+    { command: 'help',        description: '❓ Help' },
+    { command: 'admin',       description: '🔧 Admin Panel' },
+    { command: 'dashboard',   description: '📊 Admin Dashboard' },
+    { command: 'managerates', description: '💱 Manage Exchange Rates' },
+    { command: 'rates',       description: '💹 View Current Rates' },
+    { command: 'fetchrates',  description: '🔄 Fetch Live Rates' },
   ]);
-  console.log('[Bot] Telegram commands menu registered');
+  console.log('[Bot] Telegram command menu registered');
 }
 
 async function bootstrap() {
@@ -63,21 +77,12 @@ async function bootstrap() {
 
   loadCommands(bot);
 
-  process.on('SIGINT', () => {
-    console.log('[Bot] Shutting down...');
-    bot.stop('SIGINT');
-    process.exit(0);
-  });
-
-  process.on('SIGTERM', () => {
-    console.log('[Bot] Shutting down...');
-    bot.stop('SIGTERM');
-    process.exit(0);
-  });
+  process.on('SIGINT',  () => { bot.stop('SIGINT');  process.exit(0); });
+  process.on('SIGTERM', () => { bot.stop('SIGTERM'); process.exit(0); });
 
   await bot.launch();
-  await registerBotCommands(bot);
-  console.log(`[Bot] Mental Gaming Store Bot is running! @${bot.botInfo?.username || 'unknown'}`);
+  await registerBotCommands();
+  console.log(`[Bot] @${bot.botInfo?.username} is live!`);
 }
 
 bootstrap().catch((err) => {

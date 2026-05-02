@@ -16,7 +16,6 @@ const userSchema = new mongoose.Schema(
       type: Number,
       default: 0,
       min: 0,
-      comment: 'Balance in KS (Kyat equivalent store currency)',
     },
     mentalCoins: {
       type: Number,
@@ -36,7 +35,12 @@ const userSchema = new mongoose.Schema(
     restrictedRights: {
       type: [String],
       default: [],
-      comment: 'e.g. ["order", "withdraw", "chat"]',
+    },
+    theme: {
+      type: String,
+      enum: ['light', 'dark', 'auto'],
+      default: 'auto',
+      comment: 'UI theme preference: auto follows Myanmar Standard Time (6PM-6AM = dark)',
     },
     joinDate: {
       type: Date,
@@ -63,9 +67,7 @@ userSchema.methods.hasRight = function (right) {
 
 userSchema.methods.addWarning = async function () {
   this.warningsCount += 1;
-  if (this.warningsCount >= 3) {
-    this.isBlocked = true;
-  }
+  if (this.warningsCount >= 3) this.isBlocked = true;
   return this.save();
 };
 
