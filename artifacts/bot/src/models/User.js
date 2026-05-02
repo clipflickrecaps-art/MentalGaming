@@ -12,16 +12,27 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
-    walletBalance: {
+
+    // ── Dual Wallet ──────────────────────────────────────────────────────
+    balanceKS: {
       type: Number,
       default: 0,
       min: 0,
+      comment: 'Main store currency in KS (Kyat Store)',
     },
-    mentalCoins: {
+    balanceCoin: {
       type: Number,
       default: 0,
       min: 0,
+      comment: 'Mental Coins — earned via top-ups and purchases',
     },
+    totalDeposited: {
+      type: Number,
+      default: 0,
+      min: 0,
+      comment: 'Lifetime KS deposited — for VIP tier calculation',
+    },
+
     membershipTier: {
       type: String,
       enum: ['Silver', 'Gold', 'Platinum'],
@@ -40,7 +51,6 @@ const userSchema = new mongoose.Schema(
       type: String,
       enum: ['light', 'dark', 'auto'],
       default: 'auto',
-      comment: 'UI theme preference: auto follows Myanmar Standard Time (6PM-6AM = dark)',
     },
     joinDate: {
       type: Date,
@@ -55,11 +65,10 @@ const userSchema = new mongoose.Schema(
       default: Date.now,
     },
   },
-  {
-    timestamps: true,
-    versionKey: false,
-  }
+  { timestamps: true, versionKey: false }
 );
+
+// ── Helpers ─────────────────────────────────────────────────────────────────
 
 userSchema.methods.hasRight = function (right) {
   return !this.restrictedRights.includes(right);
@@ -69,6 +78,19 @@ userSchema.methods.addWarning = async function () {
   this.warningsCount += 1;
   if (this.warningsCount >= 3) this.isBlocked = true;
   return this.save();
+};
+
+/**
+ * Auto-upgrade membership tier based on totalDeposited:
+ *   Silver  < 50,000 KS
+ *   Gold    50,000 – 199,999 KS
+ *   Platinum ≥ 200,000 KS
+ */
+userSchema.methods.recalcTier = function () {
+  const deposited = this.totalDeposited || 0;
+  if (deposited >= 200000) this.membershipTier = 'Platinum';
+  else if (deposited >= 50000) this.membershipTier = 'Gold';
+  else this.membershipTier = 'Silver';
 };
 
 userSchema.statics.findByTelegramId = function (telegramId) {

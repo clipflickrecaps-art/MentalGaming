@@ -12,12 +12,13 @@ const { errorHandler } = require('./middlewares/errorHandler');
 const { navigationMiddleware } = require('./middlewares/navigationMiddleware');
 
 const rateManagerScene = require('./scenes/rateManagerScene');
-const orderScene = require('./scenes/orderScene');
+const orderScene       = require('./scenes/orderScene');
+const topupScene       = require('./scenes/topupScene');
 
 validate();
 
 const bot = new Telegraf(config.bot.token);
-const stage = new Scenes.Stage([rateManagerScene, orderScene]);
+const stage = new Scenes.Stage([rateManagerScene, orderScene, topupScene]);
 
 bot.use(errorHandler());
 bot.use(antiSpam());
@@ -31,12 +32,12 @@ function loadCommands(bot) {
   const commandsDir = path.join(__dirname, 'commands');
   const files = fs.readdirSync(commandsDir).filter((f) => f.endsWith('.js'));
 
-  // Load order ensures nav folders are registered before commands that depend on them
   const ORDER = [
     'start.js',
     'shop.js',
     'orders.js',
     'wallet.js',
+    'topup.js',
     'support.js',
     'profile.js',
     'settings.js',
@@ -59,10 +60,10 @@ function loadCommands(bot) {
         register(bot);
         console.log(`[Commands] ✅ ${file}`);
       } else {
-        console.warn(`[Commands] ⏩ Skipped (no default fn): ${file}`);
+        console.warn(`[Commands] ⏩ ${file}`);
       }
     } catch (err) {
-      console.error(`[Commands] ❌ Failed to load ${file}:`, err.message);
+      console.error(`[Commands] ❌ ${file}:`, err.message);
     }
   }
 }
@@ -73,6 +74,8 @@ async function registerBotCommands() {
     { command: 'shop',           description: '🛒 Browse Products' },
     { command: 'orders',         description: '📦 My Orders' },
     { command: 'wallet',         description: '💰 My Wallet' },
+    { command: 'topup',          description: '💳 Top Up Wallet' },
+    { command: 'history',        description: '📜 Transaction History' },
     { command: 'profile',        description: '👤 My Profile' },
     { command: 'settings',       description: '⚙️ Theme & Settings' },
     { command: 'support',        description: '💬 Customer Support' },
@@ -80,6 +83,8 @@ async function registerBotCommands() {
     { command: 'admin',          description: '🔧 Admin Panel' },
     { command: 'dashboard',      description: '📊 Admin Dashboard' },
     { command: 'pendingorders',  description: '🟡 Pending Orders' },
+    { command: 'addpayment',     description: '➕ Add Payment Method' },
+    { command: 'listpayments',   description: '💳 List Payment Methods' },
     { command: 'managerates',    description: '💱 Manage Exchange Rates' },
     { command: 'rates',          description: '💹 Current Rates' },
     { command: 'fetchrates',     description: '🔄 Fetch Live Rates' },
@@ -91,11 +96,10 @@ async function bootstrap() {
   console.log('[Bot] 🚀 Starting Mental Gaming Store Bot...');
 
   await connectDB();
-
   loadCommands(bot);
 
-  process.on('SIGINT',  () => { console.log('[Bot] Shutting down...'); bot.stop('SIGINT');  process.exit(0); });
-  process.on('SIGTERM', () => { console.log('[Bot] Shutting down...'); bot.stop('SIGTERM'); process.exit(0); });
+  process.on('SIGINT',  () => { bot.stop('SIGINT');  process.exit(0); });
+  process.on('SIGTERM', () => { bot.stop('SIGTERM'); process.exit(0); });
 
   await bot.launch();
   await registerBotCommands();
