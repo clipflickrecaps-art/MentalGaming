@@ -11,6 +11,7 @@
 const { Markup } = require('telegraf');
 const { adminOnly } = require('../middlewares/adminCheck');
 const { completeOrder, cancelAndRefund } = require('../services/OrderService');
+const { issueWarning } = require('../services/PenaltyService');
 const { checklist } = require('../utils/animations');
 const { auditLog } = require('../services/logger');
 const { price, formatDate } = require('../utils/ui');
@@ -56,6 +57,8 @@ function orderSummaryText(order) {
   const user     = order.userId?.username ? `@${order.userId.username}` : `ID: ${order.userId?.telegramId}`;
   const idLine   = order.gameId ? `\n🎮 Game ID: \`${order.gameId}\`${order.zoneId ? ` (Zone: ${order.zoneId})` : ''}` : '';
   const typeIcon = order.productType === 'DigitalCode' ? '🎁' : '🎮';
+  const tierLine = order.tierDiscount > 0 ? `\n🏷 Tier Discount (${order.tierDiscountPct}%): −${price(order.tierDiscount)}` : '';
+  const promoLine = order.promoCode ? `\n🎟 Promo ${order.promoCode}: −${price(order.promoDiscount || 0)}` : '';
 
   return (
     `🆔 Order: \`${order._id.toString().slice(-8).toUpperCase()}\`\n` +
@@ -63,10 +66,24 @@ function orderSummaryText(order) {
     `📦 Product: ${product}\n` +
     `${typeIcon} Type: ${order.productType}` +
     idLine +
-    `\n💰 Amount: ${price(order.amount)}\n` +
+    `\n💰 Original: ${price(order.originalAmount || order.amount)}` +
+    tierLine +
+    promoLine +
+    `\n✨ Charged: *${price(order.amount)}*\n` +
     `📊 Status: ${order.status}\n` +
     `🕐 Placed: ${formatDate(order.timestamp)}`
   );
+}
+
+function adminOrderActionKeyboard(orderId) {
+  return Markup.inlineKeyboard([
+    [Markup.button.callback('✅ Complete', `admin_complete:${orderId}`)],
+    [Markup.button.callback('❌ Cancel & Refund', `admin_cancel_refund:${orderId}`)],
+    [
+      Markup.button.callback('💬 Message', `admin_msg_user:${orderId}`),
+      Markup.button.callback('⚠️ Warn User', `admin_warn_user:${orderId}`),
+    ],
+  ]);
 }
 
 async function notifyCustomer(ctx, telegramId, text, extra = {}) {
@@ -88,14 +105,36 @@ module.exports = function registerAdminOrders(bot) {
 
     await ctx.reply(
       `📋 *Order Details*\n\n${orderSummaryText(order)}`,
-      {
-        parse_mode: 'Markdown',
-        ...Markup.inlineKeyboard([
-          [Markup.button.callback('✅ Complete', `admin_complete:${orderId}`)],
-          [Markup.button.callback('❌ Cancel & Refund', `admin_cancel_refund:${orderId}`)],
-          [Markup.button.callback('💬 Message User', `admin_msg_user:${orderId}`)],
-        ]),
-      }
+      { parse_mode: 'Markdown', ...adminOrderActionKeyboard(orderId) }
+    );
+  });
+
+  // ── ⚠️ Warn User from order ────────────────────────────────────────────────
+  bot.action(/^admin_warn_user:(.+)$/, adminOnly(), async (ctx) => {
+    const orderId = ctx.match[1];
+    await ctx.answerCbQuery();
+
+    const order = await Order.findById(orderId).populate('userId');
+    if (!order) return ctx.reply('❌ Order not found.');
+
+    const userId  = order.userId?.telegramId;
+    const userTag = order.userId?.username ? `@${order.userId.username}` : `ID: ${userId}`;
+
+    if (!userId) return ctx.reply('❌ User not found on this order.');
+
+    ctx.session.adminPendingAction = {
+      type:    'warn_user',
+      orderId,
+      userId,
+    };
+
+    await ctx.reply(
+      `⚠️ *Issue Warning — Order* \`${orderId.slice(-8).toUpperCase()}\`\n\n` +
+      `👤 User: *${userTag}*\n` +
+      `📦 Product: *${order.productId?.name || 'Unknown'}*\n\n` +
+      `📝 Send the *reason* for this warning:\n` +
+      `_Warning levels: 1st → 3d Spin/CheckIn ban | 2nd → 7d all-rewards ban + coin penalty | 3rd → permanent ban_`,
+      { parse_mode: 'Markdown', ...Markup.forceReply() }
     );
   });
 
@@ -254,6 +293,35 @@ module.exports = function registerAdminOrders(bot) {
           { parse_mode: 'Markdown' }
         );
         await ctx.reply(`✅ Message sent to customer.`);
+
+      } else if (type === 'warn_user') {
+        await ctx.telegram.deleteMessage(ref.chatId, ref.messageId).catch(() => {});
+
+        const result = await issueWarning(action.userId, ctx.from.id, input, ctx.telegram);
+        const { user, level, coinPenalty, expiresAt, autoBanned } = result;
+
+        const durationText = expiresAt
+          ? `until *${expiresAt.toLocaleDateString('en-GB')}*`
+          : autoBanned ? '🚫 *Permanently Banned*' : 'indefinitely';
+
+        const penaltyLine = coinPenalty > 0 ? `\n🪙 Coin Penalty: −${coinPenalty.toLocaleString()} MC` : '';
+
+        await ctx.reply(
+          `⚠️ *Warning ${level}/3 Issued*\n\n` +
+          `🆔 User: \`${user.telegramId}\`\n` +
+          `📝 Reason: ${input}` +
+          penaltyLine + `\n` +
+          `⏳ Restricted: ${durationText}\n` +
+          `🔒 Rights: ${user.restrictedRights.join(', ') || 'none'}\n` +
+          (autoBanned ? `\n🚫 *User has been permanently banned.*` : ''),
+          { parse_mode: 'Markdown' }
+        );
+
+        await auditLog(ctx.from.id, 'WARN_FROM_ORDER', action.orderId, 'Order', {
+          userId: action.userId,
+          warningLevel: level,
+          reason: input,
+        });
       }
     } catch (err) {
       console.error('[AdminOrders] Error:', err.message);
@@ -274,11 +342,7 @@ module.exports = function registerAdminOrders(bot) {
     for (const order of orders) {
       await ctx.reply(`🟡 *Pending Order*\n\n${orderSummaryText(order)}`, {
         parse_mode: 'Markdown',
-        ...Markup.inlineKeyboard([
-          [Markup.button.callback('✅ Complete', `admin_complete:${order._id}`)],
-          [Markup.button.callback('❌ Cancel & Refund', `admin_cancel_refund:${order._id}`)],
-          [Markup.button.callback('💬 Message', `admin_msg_user:${order._id}`)],
-        ]),
+        ...adminOrderActionKeyboard(order._id.toString()),
       });
     }
   });

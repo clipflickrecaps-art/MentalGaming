@@ -36,7 +36,10 @@ function adminOrderKeyboard(orderId) {
   return Markup.inlineKeyboard([
     [Markup.button.callback('✅ Complete Order',      `admin_complete:${orderId}`)],
     [Markup.button.callback('❌ Cancel & Refund',     `admin_cancel_refund:${orderId}`)],
-    [Markup.button.callback('💬 Message User',        `admin_msg_user:${orderId}`)],
+    [
+      Markup.button.callback('💬 Message User',       `admin_msg_user:${orderId}`),
+      Markup.button.callback('⚠️ Warn User',          `admin_warn_user:${orderId}`),
+    ],
     [Markup.button.callback('👁 View Details',        `admin_order_view:${orderId}`)],
   ]);
 }
