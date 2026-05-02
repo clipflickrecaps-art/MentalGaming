@@ -31,7 +31,17 @@ const orderSchema = new mongoose.Schema(
     promoDiscount: {
       type: Number,
       default: 0,
-      comment: 'KS discount applied',
+      comment: 'KS discount applied from promo code',
+    },
+    tierDiscount: {
+      type: Number,
+      default: 0,
+      comment: 'KS discount from membership tier (Gold 2%, Platinum 5%)',
+    },
+    tierDiscountPct: {
+      type: Number,
+      default: 0,
+      comment: 'Tier discount percentage applied',
     },
     status: {
       type: String,

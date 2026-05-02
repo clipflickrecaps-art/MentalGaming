@@ -14,6 +14,7 @@ const { Scenes, Markup } = require('telegraf');
 const { config } = require('../../config/settings');
 const { getTheme } = require('../services/ThemeService');
 const { createOrder } = require('../services/OrderService');
+const { applyTierDiscount } = require('../services/MembershipService');
 const { getEntries, formatEntry } = require('../services/AddressBookService');
 const { validatePromo, applyPromo } = require('../services/PromoService');
 const { checklist } = require('../utils/animations');
@@ -68,28 +69,42 @@ const orderScene = new Scenes.WizardScene(
     const stockLabel = product.stockCount === -1 ? '∞ Unlimited' : `${product.stockCount} left`;
     const theme = getTheme(ctx.user);
 
+    // ── Apply tier discount (after flash sale, before promo) ─────────────────
+    const tier = user.membershipTier || 'Silver';
+    const tierResult = applyTierDiscount(effectivePrice, tier);
+    const tierDiscount    = tierResult.discount;
+    const tierDiscountPct = tierResult.pct;
+    const priceAfterTier  = tierResult.finalPrice;
+
     ctx.session.orderSession = {
       productId: product._id.toString(),
       productName: product.name,
       productType: product.productType,
       originalPrice: product.finalPrice,
-      effectivePrice,
+      flashSalePrice: isFlashSale ? effectivePrice : null,
       isFlashSale,
+      tierDiscount,
+      tierDiscountPct,
+      effectivePrice: priceAfterTier,   // price after flash + tier, before promo
       gameName: product.category,
       gameId: null,
       zoneId: null,
       promoCode: null,
       promoDiscount: 0,
-      finalAmount: effectivePrice,
+      finalAmount: priceAfterTier,
     };
 
-    const hasBalance = user.balanceKS >= effectivePrice;
+    const hasBalance = user.balanceKS >= priceAfterTier;
     const balanceLine = hasBalance
       ? `💰 Your Balance: ${theme.format.bold(price(user.balanceKS))} ✅`
-      : `💰 Your Balance: ${theme.format.bold(price(user.balanceKS))} ❌ _(Need ${price(effectivePrice - user.balanceKS)} more)_`;
+      : `💰 Your Balance: ${theme.format.bold(price(user.balanceKS))} ❌ _(Need ${price(priceAfterTier - user.balanceKS)} more)_`;
 
+    const tierBadgeMap = { Silver: '🥈', Gold: '🥇', Platinum: '💎' };
     const flashLine = isFlashSale
       ? [`🔥 *FLASH SALE* — ⏳ Ends in: *${formatCountdown(msLeft)}*`]
+      : [];
+    const tierLine = tierDiscount > 0
+      ? [`${tierBadgeMap[tier]} ${tier} Discount (${tierDiscountPct}%): *−${price(tierDiscount)}*`]
       : [];
 
     const text = buildMessage(theme, [{
@@ -99,8 +114,13 @@ const orderScene = new Scenes.WizardScene(
         `🗂 Type: ${product.productType === 'DigitalCode' ? '🎁 Digital Code' : '🎮 Direct Top-up'}`,
         `🌍 Region: ${product.region}`,
         ...flashLine,
-        `${theme.emoji.money} Price: ${theme.format.bold(price(effectivePrice))}`,
-        isFlashSale ? `~~${price(product.finalPrice)}~~ ← Original` : null,
+        isFlashSale
+          ? `${theme.emoji.money} Price: ~~${price(product.finalPrice)}~~ → *${price(effectivePrice)}*`
+          : `${theme.emoji.money} Price: ${theme.format.bold(price(product.finalPrice))}`,
+        ...tierLine,
+        tierDiscount > 0
+          ? `✨ Your Price: ${theme.format.bold(price(priceAfterTier))}`
+          : null,
         `📦 Stock: ${stockLabel}`,
         ``,
         balanceLine,
@@ -223,11 +243,20 @@ const orderScene = new Scenes.WizardScene(
     const theme = getTheme(ctx.user);
 
     const promoLine = sess.promoCode
-      ? [`🎟 Promo: *${sess.promoCode}* (−${price(sess.promoDiscount)})`]
+      ? [`🎟 Promo *${sess.promoCode}*: −${price(sess.promoDiscount)}`]
       : [];
     const gameIdLine = sess.gameId
       ? [`🎮 Game ID: ${theme.format.code(sess.gameId)}${sess.zoneId ? ` / Zone: ${sess.zoneId}` : ''}`]
       : [];
+    const tierBadgeMap = { Silver: '🥈', Gold: '🥇', Platinum: '💎' };
+    const userTier = user?.membershipTier || 'Silver';
+    const tierLine = sess.tierDiscount > 0
+      ? [`${tierBadgeMap[userTier]} ${userTier} Discount (${sess.tierDiscountPct}%): −${price(sess.tierDiscount)}`]
+      : [];
+    const flashLine = sess.isFlashSale
+      ? [`🔥 Flash Sale Price: ${price(sess.flashSalePrice || sess.originalPrice)}`]
+      : [];
+    const hasAnyDiscount = sess.tierDiscount > 0 || sess.promoDiscount > 0 || sess.isFlashSale;
 
     const text = buildMessage(theme, [{
       title: '✅ Confirm Order',
@@ -235,12 +264,16 @@ const orderScene = new Scenes.WizardScene(
         `📦 *${sess.productName}*`,
         ...gameIdLine,
         ``,
+        `💰 Original Price: ${price(sess.originalPrice)}`,
+        ...flashLine,
+        ...tierLine,
         ...promoLine,
-        sess.promoCode ? `💰 Final Price: *${price(sess.finalAmount)}*` : `💰 Price: *${price(sess.finalAmount)}*`,
+        hasAnyDiscount ? `──────────────` : null,
+        `✨ *Final Price: ${price(sess.finalAmount)}*`,
         `💳 Balance After: *${price((user?.balanceKS || 0) - sess.finalAmount)}*`,
         ``,
         `_Tap Confirm to place your order._`,
-      ],
+      ].filter(Boolean),
     }]);
 
     await ctx.reply(text, {
@@ -342,6 +375,8 @@ orderScene.action('order_final_confirm', async (ctx) => {
       gameName: sess.gameName,
       promoCode: sess.promoCode,
       promoDiscount: sess.promoDiscount,
+      tierDiscount: sess.tierDiscount || 0,
+      tierDiscountPct: sess.tierDiscountPct || 0,
       finalAmount: sess.finalAmount,
     });
 
@@ -384,9 +419,11 @@ async function notifyAdmin(ctx, order, sess) {
   const orderId = order._id.toString();
   const shortId = orderId.slice(-8).toUpperCase();
 
-  const promoLine = sess.promoCode ? `\n🎟 Promo: \`${sess.promoCode}\` (−${price(sess.promoDiscount)})` : '';
-  const gameIdLine = sess.gameId ? `\n🎮 Game ID: \`${sess.gameId}\`${sess.zoneId ? ` / Zone: \`${sess.zoneId}\`` : ''}` : '';
-  const typeIcon = sess.productType === 'DigitalCode' ? '🎁 Digital Code' : '🎮 Direct Top-up';
+  const promoLine      = sess.promoCode    ? `\n🎟 Promo: \`${sess.promoCode}\` (−${price(sess.promoDiscount)})` : '';
+  const tierLine       = sess.tierDiscount > 0 ? `\n🏷 Tier Discount (${sess.tierDiscountPct}%): −${price(sess.tierDiscount)}` : '';
+  const flashSaleLine  = sess.isFlashSale  ? `\n🔥 Flash Sale applied` : '';
+  const gameIdLine     = sess.gameId ? `\n🎮 Game ID: \`${sess.gameId}\`${sess.zoneId ? ` / Zone: \`${sess.zoneId}\`` : ''}` : '';
+  const typeIcon       = sess.productType === 'DigitalCode' ? '🎁 Digital Code' : '🎮 Direct Top-up';
 
   const text =
     `🔔 *New Order — Action Required*\n\n` +
@@ -395,8 +432,11 @@ async function notifyAdmin(ctx, order, sess) {
     `📦 Product: *${sess.productName}*\n` +
     `🗂 Type: ${typeIcon}` +
     gameIdLine +
-    `\n💰 Amount: *${price(sess.finalAmount)}*` +
+    `\n💰 Original: ${price(sess.originalPrice)}` +
+    flashSaleLine +
+    tierLine +
     promoLine +
+    `\n✨ *Charged: ${price(sess.finalAmount)}*` +
     `\n🕐 Time: ${new Date().toLocaleString('en-GB', { timeZone: 'Asia/Rangoon' })} MMT`;
 
   try {

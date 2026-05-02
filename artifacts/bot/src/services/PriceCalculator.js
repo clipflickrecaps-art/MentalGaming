@@ -176,6 +176,26 @@ async function setManualPrice(productId, newPrice) {
   return product;
 }
 
+/**
+ * calcTierDiscount — Apply membership tier discount to an order price.
+ *
+ * Tier rates (defined in MembershipService):
+ *   Silver   → 0%
+ *   Gold     → 2%
+ *   Platinum → 5%
+ *
+ * Called at checkout (orderScene Step 0) AFTER flash-sale price is resolved
+ * and BEFORE promo code discount is applied.
+ *
+ * @param {number} basePrice  - price after flash sale, before promo
+ * @param {string} tier       - 'Silver' | 'Gold' | 'Platinum'
+ * @returns {{ finalPrice: number, discount: number, pct: number }}
+ */
+function calcTierDiscount(basePrice, tier) {
+  const { applyTierDiscount } = require('./MembershipService');
+  return applyTierDiscount(basePrice, tier);
+}
+
 module.exports = {
   calculateSuggested,
   previewCurrencyImpact,
@@ -183,4 +203,5 @@ module.exports = {
   approveAllSuggestions,
   approveSingleProduct,
   setManualPrice,
+  calcTierDiscount,
 };
