@@ -29,8 +29,23 @@ const userSchema = new mongoose.Schema(
     restrictionReason: { type: String, default: null },
     isBlocked:         { type: Boolean, default: false },
 
-    // ── Referral (index declared below via schema.index, not inline) ─────────
+    // ── Referral ─────────────────────────────────────────────────────────────
     referralCode: { type: String, default: null },
+
+    // ── Attribution Analytics ─────────────────────────────────────────────────
+    // Tracks where the user came from on first join (never overwritten after set).
+    joinSource: {
+      type: String,
+      enum:    ['direct', 'referral', 'channel', 'share', 'unknown'],
+      default: 'unknown',
+      index:   true,
+      comment: 'How the user first found the bot',
+    },
+    joinRef: {
+      type:    String,
+      default: null,
+      comment: 'referral code | channel post ID | product ID | null',
+    },
 
     // ── Preferences ──────────────────────────────────────────────────────────
     theme:      { type: String, enum: ['light', 'dark', 'auto'], default: 'auto' },
@@ -40,7 +55,7 @@ const userSchema = new mongoose.Schema(
   { timestamps: true, versionKey: false }
 );
 
-// ── Indexes (single declaration per field to avoid Mongoose duplicate warnings)
+// ── Indexes ───────────────────────────────────────────────────────────────────
 userSchema.index({ referralCode: 1 }, { unique: true, sparse: true });
 
 userSchema.methods.hasRight = function (right) {

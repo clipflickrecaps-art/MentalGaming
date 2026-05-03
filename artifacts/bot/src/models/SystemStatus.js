@@ -19,7 +19,7 @@ const systemStatusSchema = new mongoose.Schema(
     maintenanceSince:   { type: Date,    default: null },
     maintenanceUntil:   { type: Date,    default: null },
     maintenanceMessage: {
-      type: String,
+      type:    String,
       default: '🔧 We are performing scheduled maintenance. We\'ll be back shortly!',
     },
 
@@ -27,30 +27,49 @@ const systemStatusSchema = new mongoose.Schema(
     holidayMode:    { type: Boolean, default: false },
     holidayUntil:   { type: Date,    default: null },
     holidayMessage: {
-      type: String,
+      type:    String,
       default: '🎉 We are on holiday! You can browse but orders and top-ups are temporarily disabled.',
     },
 
     // ── Referral Program Config ────────────────────────────────────────────────
-    referralEnabled: { type: Boolean, default: true },
-    referralCommissionRate: { type: Number, default: 2, min: 0, max: 50 },
-    referralCommissionMode: { type: String, enum: ['first', 'every'], default: 'first' },
-    referralCommissionType: { type: String, enum: ['KS', 'Coin', 'Both'], default: 'KS' },
-    referralMinTopup:       { type: Number, default: 1000 },
-    referralVelocityLimit:  { type: Number, default: 10 },
-    referralWelcomeBonusKS:    { type: Number, default: 200 },
-    referralWelcomeBonusCoins: { type: Number, default: 50 },
+    referralEnabled:           { type: Boolean, default: true },
+    referralCommissionRate:    { type: Number,  default: 2, min: 0, max: 50 },
+    referralCommissionMode:    { type: String,  enum: ['first', 'every'], default: 'first' },
+    referralCommissionType:    { type: String,  enum: ['KS', 'Coin', 'Both'], default: 'KS' },
+    referralMinTopup:          { type: Number,  default: 1000 },
+    referralVelocityLimit:     { type: Number,  default: 10 },
+    referralWelcomeBonusKS:    { type: Number,  default: 200 },
+    referralWelcomeBonusCoins: { type: Number,  default: 50 },
 
     // ── Feedback & Review Channel ──────────────────────────────────────────────
     feedbackChannelId: {
-      type: String,
+      type:    String,
       default: null,
       comment: 'Telegram channel ID or @username where 4-5★ reviews are forwarded',
     },
     feedbackEnabled: {
-      type: Boolean,
+      type:    Boolean,
       default: true,
       comment: 'Master switch for the automated feedback watcher',
+    },
+
+    // ── Product Announcement Channel ──────────────────────────────────────────
+    announcementChannelId: {
+      type:    String,
+      default: null,
+      comment: 'Channel to forward new product alerts / flash sale announcements',
+    },
+
+    // ── Webhook Security ───────────────────────────────────────────────────────
+    webhookSecret: {
+      type:    String,
+      default: null,
+      comment: 'HMAC secret used to verify incoming webhook payloads',
+    },
+    webhookIpWhitelist: {
+      type:    [String],
+      default: [],
+      comment: 'Extra allowed IPs beyond the env-var WEBHOOK_ALLOWED_IPS list',
     },
 
     // ── Meta ───────────────────────────────────────────────────────────────────

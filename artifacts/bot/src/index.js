@@ -73,6 +73,7 @@ function loadCommands(bot) {
     'financialExport.js',   // ← CSV/financial reports (OWNER only)
     'faq.js',               // ← FAQ library + video tutorials
     'feedback.js',          // ← Post-order feedback + review wall
+    'apiManagement.js',     // ← External API / provider management + attribution analytics
     'admin.js',
     'help.js',
     'ambient.js',           // ← LAST: catch-all ambient AI text handler
@@ -150,7 +151,17 @@ async function registerBotCommands() {
     { command: 'setfeedbackchannel', description: '📢 Set Review Channel (Manager+)' },
     { command: 'togglefeedback',     description: '🔛 Toggle Feedback Watcher (Manager+)' },
     { command: 'refstats',           description: '📊 Referral Stats (Manager+)' },
-    { command: 'reffraud',      description: '⚠️ Fraud Flags (Manager+)' },
+    { command: 'reffraud',           description: '⚠️ Fraud Flags (Manager+)' },
+    { command: 'toggledelivery',     description: '🔄 Toggle Auto/Manual Delivery (Manager+)' },
+    { command: 'setprovider',        description: '🔌 Set API Provider for Product (Manager+)' },
+    { command: 'listproviders',      description: '🟢 Provider Health Check (Manager+)' },
+    { command: 'providerstats',      description: '📊 API Call Stats (Manager+)' },
+    { command: 'testapi',            description: '🧪 Test Provider Connection (Manager+)' },
+    { command: 'adminproducts',      description: '📦 Products & Delivery Modes (Manager+)' },
+    { command: 'joinsources',        description: '📊 User Attribution Stats (Manager+)' },
+    { command: 'setannouncechannel', description: '📢 Set Announcement Channel (Owner)' },
+    { command: 'announce',           description: '📣 Broadcast Product to Channel (Manager+)' },
+    { command: 'webhookstats',       description: '📡 Webhook Event Stats (Owner)' },
     // ── Owner only ────────────────────────────────────────────────────────────
     { command: 'admin',         description: '🔧 Admin Panel (Owner)' },
     { command: 'dashboard',     description: '📊 Dashboard (Owner)' },
@@ -210,6 +221,11 @@ async function bootstrap() {
 
   await bot.launch();
   await registerBotCommands();
+
+  // Webhook event processor — polls every 30s for events written by api-server
+  const { startWebhookProcessor } = require('./services/WebhookProcessor');
+  startWebhookProcessor(bot.telegram);
+
   console.log(`[Bot] ✅ @${bot.botInfo?.username} is live!`);
 }
 
