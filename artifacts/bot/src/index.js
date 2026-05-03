@@ -18,6 +18,7 @@ const { attachUser }            = require('./middlewares/authUser');
 const { antiSpam }              = require('./middlewares/antiSpam');
 const { errorHandler }          = require('./middlewares/errorHandler');
 const { navigationMiddleware }  = require('./middlewares/navigationMiddleware');
+const { maintenanceCheck }      = require('./middlewares/maintenanceCheck');
 
 const rateManagerScene = require('./scenes/rateManagerScene');
 const orderScene       = require('./scenes/orderScene');
@@ -41,6 +42,7 @@ const stage = new Scenes.Stage([
 bot.use(errorHandler());
 bot.use(antiSpam());
 bot.use(session());
+bot.use(maintenanceCheck());   // ← maintenance/holiday gate (after session, before auth)
 bot.use(stage.middleware());
 bot.use(attachUser());
 
@@ -67,6 +69,7 @@ function loadCommands(bot) {
     'dashboard.js',
     'adminOrders.js',
     'userManagement.js',
+    'systemManagement.js',  // ← RBAC + maintenance + templates + pulse
     'admin.js',
     'help.js',
   ];
@@ -106,45 +109,60 @@ async function registerBotCommands() {
     { command: 'streak',        description: '🔥 My Streak Stats' },
     { command: 'calendar',      description: '📅 Check-In Calendar' },
     { command: 'progress',      description: '📊 Tier Level Progress' },
-    { command: 'penalize',      description: '⚠️ Penalize User (Admin)' },
-    { command: 'userlog',       description: '📋 User Activity Log (Admin)' },
-    { command: 'block',         description: '🚫 Block User (Admin)' },
-    { command: 'unblock',       description: '✅ Unblock User (Admin)' },
     { command: 'promo',         description: '🎟 Check Promo Code' },
     { command: 'myids',         description: '📖 Saved Game IDs' },
     { command: 'saveid',        description: '➕ Save a Game ID' },
     { command: 'deleteid',      description: '🗑 Delete a Game ID' },
     { command: 'support',       description: '💬 AI Customer Support' },
     { command: 'mytickets',     description: '🎫 My Support Tickets' },
+    { command: 'myrole',        description: '🔹 My Admin Role' },
     { command: 'profile',       description: '👤 My Profile' },
     { command: 'settings',      description: '⚙️ Theme & Settings' },
     { command: 'help',          description: '❓ Help' },
-    // ── Admin ─────────────────────────────────────────────────────────────────
-    { command: 'admin',         description: '🔧 Admin Panel' },
-    { command: 'dashboard',     description: '📊 Dashboard' },
-    { command: 'broadcast',     description: '📢 Broadcast Message' },
-    { command: 'tickets',       description: '🎫 Support Tickets' },
-    { command: 'closeticket',   description: '⚫ Close a Ticket' },
-    { command: 'pendingorders', description: '🟡 Pending Orders' },
-    { command: 'addcodes',      description: '🎁 Add Digital Codes' },
-    { command: 'flashsale',     description: '🔥 Activate Flash Sale' },
-    { command: 'createpromo',   description: '🎟 Create Promo Code' },
-    { command: 'listpromos',    description: '📋 List Promo Codes' },
-    { command: 'deletepromo',   description: '🗑 Deactivate Promo' },
-    { command: 'userinfo',      description: '👤 User Info' },
-    { command: 'users',         description: '👥 User List' },
-    { command: 'ban',           description: '🚫 Ban User' },
-    { command: 'unban',         description: '✅ Unban User' },
-    { command: 'warn',          description: '⚠️ Warn User' },
-    { command: 'unwarn',        description: '✅ Remove Warning' },
-    { command: 'restrict',      description: '🔒 Restrict Rights' },
-    { command: 'unrestrict',    description: '🔓 Remove Restrictions' },
-    { command: 'adjustbal',     description: '💳 Adjust Balance' },
-    { command: 'addpayment',    description: '➕ Add Payment Method' },
-    { command: 'listpayments',  description: '💳 Payment Methods' },
-    { command: 'managerates',   description: '💱 Manage Rates' },
-    { command: 'rates',         description: '💹 Current Rates' },
-    { command: 'fetchrates',    description: '🔄 Fetch Live Rates' },
+    // ── Staff+ ────────────────────────────────────────────────────────────────
+    { command: 'pendingorders', description: '🟡 Pending Orders (Staff+)' },
+    { command: 'tickets',       description: '🎫 Support Tickets (Staff+)' },
+    { command: 'closeticket',   description: '⚫ Close a Ticket (Staff+)' },
+    { command: 'templates',     description: '📜 Quick-Reply Templates (Staff+)' },
+    // ── Manager+ ──────────────────────────────────────────────────────────────
+    { command: 'addcodes',      description: '🎁 Add Digital Codes (Manager+)' },
+    { command: 'flashsale',     description: '🔥 Activate Flash Sale (Manager+)' },
+    { command: 'maintenance',   description: '🔧 Maintenance Mode (Manager+)' },
+    { command: 'holiday',       description: '🎉 Holiday Mode (Manager+)' },
+    { command: 'systemstatus',  description: '📊 System Status (Manager+)' },
+    { command: 'addtemplate',   description: '📝 Add Template (Manager+)' },
+    { command: 'deletetemplate',description: '🗑 Delete Template (Manager+)' },
+    { command: 'createpromo',   description: '🎟 Create Promo Code (Manager+)' },
+    { command: 'listpromos',    description: '📋 List Promo Codes (Manager+)' },
+    { command: 'deletepromo',   description: '🗑 Deactivate Promo (Manager+)' },
+    { command: 'broadcast',     description: '📢 Broadcast Message (Manager+)' },
+    // ── Owner only ────────────────────────────────────────────────────────────
+    { command: 'admin',         description: '🔧 Admin Panel (Owner)' },
+    { command: 'dashboard',     description: '📊 Dashboard (Owner)' },
+    { command: 'pulse',         description: '📡 System Pulse (Owner)' },
+    { command: 'addadmin',      description: '👑 Add Admin (Owner)' },
+    { command: 'removeadmin',   description: '🗑 Remove Admin (Owner)' },
+    { command: 'listadmins',    description: '👥 List Admins (Owner)' },
+    { command: 'setrole',       description: '🔄 Change Admin Role (Owner)' },
+    { command: 'auditlog',      description: '📋 Audit Log (Owner)' },
+    { command: 'penalize',      description: '⚠️ Penalize User (Owner)' },
+    { command: 'userlog',       description: '📋 User Activity Log (Owner)' },
+    { command: 'block',         description: '🚫 Block User (Owner)' },
+    { command: 'unblock',       description: '✅ Unblock User (Owner)' },
+    { command: 'userinfo',      description: '👤 User Info (Owner)' },
+    { command: 'users',         description: '👥 User List (Owner)' },
+    { command: 'ban',           description: '🚫 Ban User (Owner)' },
+    { command: 'unban',         description: '✅ Unban User (Owner)' },
+    { command: 'warn',          description: '⚠️ Warn User (Owner)' },
+    { command: 'unwarn',        description: '✅ Remove Warning (Owner)' },
+    { command: 'restrict',      description: '🔒 Restrict Rights (Owner)' },
+    { command: 'unrestrict',    description: '🔓 Remove Restrictions (Owner)' },
+    { command: 'adjustbal',     description: '💳 Adjust Balance (Owner)' },
+    { command: 'addpayment',    description: '➕ Add Payment Method (Owner)' },
+    { command: 'listpayments',  description: '💳 Payment Methods (Owner)' },
+    { command: 'managerates',   description: '💱 Manage Rates (Owner)' },
+    { command: 'rates',         description: '💹 Current Rates (Owner)' },
+    { command: 'fetchrates',    description: '🔄 Fetch Live Rates (Owner)' },
   ]);
   console.log('[Bot] ✅ Command menu registered');
 }

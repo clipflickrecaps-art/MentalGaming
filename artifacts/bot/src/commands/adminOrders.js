@@ -5,18 +5,18 @@
  *                       DigitalCode: auto-pull code → send receipt
  * [❌ Cancel & Refund] → ask reason → cancelAndRefund → notify user
  * [💬 Message User]   → ask message → forward to user
- * [👁 View Details]   → show full order card
+ * [📜 Use Template]   → pick template → send to user instantly
+ * [⚠️ Warn User]      → ask reason → issueWarning
  */
 
 const { Markup } = require('telegraf');
-const { adminOnly } = require('../middlewares/adminCheck');
+const { requireRole, isAnyAdmin } = require('../middlewares/adminCheck');
 const { completeOrder, cancelAndRefund } = require('../services/OrderService');
 const { issueWarning } = require('../services/PenaltyService');
 const { checklist } = require('../utils/animations');
 const { auditLog } = require('../services/logger');
 const { price, formatDate } = require('../utils/ui');
 const Order = require('../models/Order');
-const { config } = require('../../config/settings');
 
 // ── Professional receipt ──────────────────────────────────────────────────────
 function buildReceipt(order, deliveredData) {
@@ -83,6 +83,7 @@ function adminOrderActionKeyboard(orderId) {
       Markup.button.callback('💬 Message', `admin_msg_user:${orderId}`),
       Markup.button.callback('⚠️ Warn User', `admin_warn_user:${orderId}`),
     ],
+    [Markup.button.callback('📜 Use Template', `tpl_pick:order:${orderId}`)],
   ]);
 }
 
@@ -97,7 +98,7 @@ async function notifyCustomer(ctx, telegramId, text, extra = {}) {
 module.exports = function registerAdminOrders(bot) {
 
   // ── View order details ─────────────────────────────────────────────────────
-  bot.action(/^admin_order_view:(.+)$/, adminOnly(), async (ctx) => {
+  bot.action(/^admin_order_view:(.+)$/, requireRole('STAFF'), async (ctx) => {
     await ctx.answerCbQuery();
     const orderId = ctx.match[1];
     const order = await Order.findById(orderId).populate('userId').populate('productId');
@@ -110,7 +111,7 @@ module.exports = function registerAdminOrders(bot) {
   });
 
   // ── ⚠️ Warn User from order ────────────────────────────────────────────────
-  bot.action(/^admin_warn_user:(.+)$/, adminOnly(), async (ctx) => {
+  bot.action(/^admin_warn_user:(.+)$/, requireRole('STAFF'), async (ctx) => {
     const orderId = ctx.match[1];
     await ctx.answerCbQuery();
 
@@ -122,11 +123,7 @@ module.exports = function registerAdminOrders(bot) {
 
     if (!userId) return ctx.reply('❌ User not found on this order.');
 
-    ctx.session.adminPendingAction = {
-      type:    'warn_user',
-      orderId,
-      userId,
-    };
+    ctx.session.adminPendingAction = { type: 'warn_user', orderId, userId };
 
     await ctx.reply(
       `⚠️ *Issue Warning — Order* \`${orderId.slice(-8).toUpperCase()}\`\n\n` +
@@ -138,8 +135,8 @@ module.exports = function registerAdminOrders(bot) {
     );
   });
 
-  // ── Complete (DirectTopup: ask delivery, DigitalCode: auto) ───────────────
-  bot.action(/^admin_complete:(.+)$/, adminOnly(), async (ctx) => {
+  // ── Complete ───────────────────────────────────────────────────────────────
+  bot.action(/^admin_complete:(.+)$/, requireRole('STAFF'), async (ctx) => {
     const orderId = ctx.match[1];
     await ctx.answerCbQuery();
 
@@ -148,7 +145,6 @@ module.exports = function registerAdminOrders(bot) {
     if (order.status !== 'Pending') return ctx.answerCbQuery(`Already ${order.status}`, { show_alert: true });
 
     if (order.productType === 'DigitalCode') {
-      // Auto-pull code
       const ref = { chatId: ctx.chat.id, messageId: (await ctx.reply('⌛')).message_id };
 
       try {
@@ -173,7 +169,6 @@ module.exports = function registerAdminOrders(bot) {
       }
 
     } else {
-      // DirectTopup: ask for delivery data
       ctx.session.adminPendingAction = { type: 'complete', orderId };
       await ctx.reply(
         `✅ *Completing Order* \`${orderId.slice(-8).toUpperCase()}\`\n\n` +
@@ -185,7 +180,7 @@ module.exports = function registerAdminOrders(bot) {
   });
 
   // ── Cancel & Refund ────────────────────────────────────────────────────────
-  bot.action(/^admin_cancel_refund:(.+)$/, adminOnly(), async (ctx) => {
+  bot.action(/^admin_cancel_refund:(.+)$/, requireRole('STAFF'), async (ctx) => {
     const orderId = ctx.match[1];
     await ctx.answerCbQuery();
 
@@ -203,7 +198,7 @@ module.exports = function registerAdminOrders(bot) {
   });
 
   // ── Message User ──────────────────────────────────────────────────────────
-  bot.action(/^admin_msg_user:(.+)$/, adminOnly(), async (ctx) => {
+  bot.action(/^admin_msg_user:(.+)$/, requireRole('STAFF'), async (ctx) => {
     const orderId = ctx.match[1];
     await ctx.answerCbQuery();
 
@@ -226,7 +221,10 @@ module.exports = function registerAdminOrders(bot) {
   // ── Text interceptor: handle all admin pending actions ────────────────────
   bot.on('text', async (ctx, next) => {
     const action = ctx.session?.adminPendingAction;
-    if (!action || ctx.from.id !== config.bot.adminId) return next();
+    if (!action) return next();
+
+    const adminOk = await isAnyAdmin(ctx.from?.id);
+    if (!adminOk) return next();
 
     const { type, orderId, userTelegramId } = action;
     const input = ctx.message.text.trim();
@@ -330,7 +328,7 @@ module.exports = function registerAdminOrders(bot) {
   });
 
   // ── /pendingorders ─────────────────────────────────────────────────────────
-  bot.command('pendingorders', adminOnly(), async (ctx) => {
+  bot.command('pendingorders', requireRole('STAFF'), async (ctx) => {
     const orders = await Order.find({ status: 'Pending' })
       .populate('userId', 'username telegramId')
       .populate('productId', 'name finalPrice productType')
@@ -348,7 +346,7 @@ module.exports = function registerAdminOrders(bot) {
   });
 
   // ── /addcodes — Add digital gift card codes ────────────────────────────────
-  bot.command('addcodes', adminOnly(), async (ctx) => {
+  bot.command('addcodes', requireRole('MANAGER'), async (ctx) => {
     const args = ctx.message.text.split(/\s+/).slice(1);
     if (args.length < 2) {
       return ctx.reply(
@@ -363,6 +361,7 @@ module.exports = function registerAdminOrders(bot) {
     try {
       const { addDigitalCodes } = require('../services/OrderService');
       const count = await addDigitalCodes(productId, codes, ctx.from.id);
+      await auditLog(ctx.from.id, 'DIGITAL_CODES_ADDED', productId, 'Product', { count });
       await ctx.reply(`✅ Added *${count}* digital codes to product \`${productId}\``, {
         parse_mode: 'Markdown',
       });
@@ -372,9 +371,9 @@ module.exports = function registerAdminOrders(bot) {
   });
 
   // ── /flashsale — Activate a flash sale ────────────────────────────────────
-  bot.command('flashsale', adminOnly(), async (ctx) => {
+  bot.command('flashsale', requireRole('MANAGER'), async (ctx) => {
     const args = ctx.message.text.split(/\s+/).slice(1);
-    if (args.length < 4) {
+    if (args.length < 3) {
       return ctx.reply(
         '📋 *Flash Sale Setup*\n\n`/flashsale <productId> <salePrice> <durationHours>`\n\nExample: `/flashsale abc123 2500 4`',
         { parse_mode: 'Markdown' }
@@ -393,6 +392,7 @@ module.exports = function registerAdminOrders(bot) {
     try {
       const { activateFlashSale } = require('../services/FlashSaleService');
       const product = await activateFlashSale(productId, salePrice, start, end);
+      await auditLog(ctx.from.id, 'FLASH_SALE_ACTIVATED', productId, 'Product', { salePrice, durationH });
       await ctx.reply(
         `🔥 *Flash Sale Activated!*\n\n` +
         `📦 *${product.name}*\n` +

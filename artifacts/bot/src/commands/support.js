@@ -3,15 +3,15 @@
  *
  * User: /support → enters supportScene (AI assistant → escalate)
  * Admin: ticket management — reply, resolve, list open tickets
+ *        [📜 Use Template] on every ticket card
  */
 
 const { Markup } = require('telegraf');
 const Nav = require('../services/NavigationService');
 const { buildMessage, formatDate } = require('../utils/ui');
-const { adminOnly } = require('../middlewares/adminCheck');
+const { requireRole, isAnyAdmin } = require('../middlewares/adminCheck');
 const { auditLog } = require('../services/logger');
 const SupportTicket = require('../models/SupportTicket');
-const { config } = require('../../config/settings');
 
 const TOPIC_META = {
   order:   { label: '📦 Order Issue',      emoji: '📦' },
@@ -92,7 +92,7 @@ module.exports = function registerSupport(bot) {
   });
 
   // ── Admin: /tickets ────────────────────────────────────────────────────────
-  bot.command('tickets', adminOnly(), async (ctx) => {
+  bot.command('tickets', requireRole('STAFF'), async (ctx) => {
     const args = ctx.message.text.split(/\s+/).slice(1);
     const filter = args[0] === 'all' ? {} : { status: { $in: ['Open', 'InProgress'] } };
 
@@ -101,7 +101,7 @@ module.exports = function registerSupport(bot) {
 
     const priorityBadge = { Normal: '🟡', High: '🟠', Urgent: '🔴' };
     for (const t of tickets) {
-      const meta = TOPIC_META[t.topic] || { emoji: '❓', label: t.topic };
+      const meta  = TOPIC_META[t.topic] || { emoji: '❓', label: t.topic };
       const badge = priorityBadge[t.priority] || '🟡';
       const userTag = t.username ? `@${t.username}` : `ID: ${t.telegramId}`;
 
@@ -114,7 +114,10 @@ module.exports = function registerSupport(bot) {
         {
           parse_mode: 'Markdown',
           ...Markup.inlineKeyboard([
-            [Markup.button.callback(`💬 Reply`, `ticket_reply:${t.ticketId}`)],
+            [
+              Markup.button.callback(`💬 Reply`,         `ticket_reply:${t.ticketId}`),
+              Markup.button.callback(`📜 Template`,      `tpl_pick:ticket:${t.ticketId}`),
+            ],
             [
               Markup.button.callback('✅ Resolve', `ticket_resolve:${t.ticketId}`),
               Markup.button.callback('🔴 Urgent',  `ticket_urgent:${t.ticketId}`),
@@ -126,7 +129,7 @@ module.exports = function registerSupport(bot) {
   });
 
   // ── Admin action: reply to ticket ──────────────────────────────────────────
-  bot.action(/^ticket_reply:(.+)$/, adminOnly(), async (ctx) => {
+  bot.action(/^ticket_reply:(.+)$/, requireRole('STAFF'), async (ctx) => {
     const ticketId = ctx.match[1];
     await ctx.answerCbQuery();
 
@@ -143,7 +146,7 @@ module.exports = function registerSupport(bot) {
   });
 
   // ── Admin action: resolve ticket ───────────────────────────────────────────
-  bot.action(/^ticket_resolve:(.+)$/, adminOnly(), async (ctx) => {
+  bot.action(/^ticket_resolve:(.+)$/, requireRole('STAFF'), async (ctx) => {
     const ticketId = ctx.match[1];
     await ctx.answerCbQuery('Resolving...');
 
@@ -154,7 +157,7 @@ module.exports = function registerSupport(bot) {
     );
     if (!ticket) return ctx.reply('❌ Ticket not found.');
 
-    await auditLog(ctx.from.id, 'TICKET_RESOLVED', ticketId, 'SupportTicket');
+    await auditLog(ctx.from.id, 'TICKET_RESOLVED', ticketId, 'System');
     await ctx.reply(`✅ Ticket \`${ticketId}\` marked as Resolved.`, { parse_mode: 'Markdown' });
 
     try {
@@ -169,18 +172,19 @@ module.exports = function registerSupport(bot) {
   });
 
   // ── Admin action: mark urgent ──────────────────────────────────────────────
-  bot.action(/^ticket_urgent:(.+)$/, adminOnly(), async (ctx) => {
+  bot.action(/^ticket_urgent:(.+)$/, requireRole('STAFF'), async (ctx) => {
     const ticketId = ctx.match[1];
     await ctx.answerCbQuery('Marked Urgent');
 
     await SupportTicket.findOneAndUpdate({ ticketId }, { priority: 'Urgent', status: 'InProgress' });
+    await auditLog(ctx.from.id, 'TICKET_URGENT', ticketId, 'System');
     await ctx.reply(`🔴 Ticket \`${ticketId}\` marked *Urgent* and set to *InProgress*.`, {
       parse_mode: 'Markdown',
     });
   });
 
   // ── Admin: /closeticket ────────────────────────────────────────────────────
-  bot.command('closeticket', adminOnly(), async (ctx) => {
+  bot.command('closeticket', requireRole('STAFF'), async (ctx) => {
     const ticketId = ctx.message.text.split(/\s+/)[1];
     if (!ticketId) return ctx.reply('Usage: /closeticket TKT-XXXX');
 
@@ -191,13 +195,17 @@ module.exports = function registerSupport(bot) {
     );
     if (!ticket) return ctx.reply('❌ Ticket not found.');
 
+    await auditLog(ctx.from.id, 'TICKET_CLOSED', ticketId, 'System');
     await ctx.reply(`⚫ Ticket \`${ticket.ticketId}\` closed.`, { parse_mode: 'Markdown' });
   });
 
   // ── Text interceptor: admin ticket reply ──────────────────────────────────
   bot.on('text', async (ctx, next) => {
     const state = ctx.session?.adminTicketReply;
-    if (!state || ctx.from.id !== config.bot.adminId) return next();
+    if (!state) return next();
+
+    const adminOk = await isAnyAdmin(ctx.from?.id);
+    if (!adminOk) return next();
 
     const { ticketId, userTelegramId } = state;
     ctx.session.adminTicketReply = null;
@@ -216,21 +224,24 @@ module.exports = function registerSupport(bot) {
       await ctx.telegram.sendMessage(
         userTelegramId,
         `💬 *Support Reply* — Ticket \`${ticketId}\`\n\n${replyText}\n\n` +
-        `_To reply, use /support and create a new ticket or reply here._`,
+        `_To reply, use /support and create a new ticket._`,
         { parse_mode: 'Markdown' }
       );
 
       await ctx.reply(`✅ Reply sent for ticket \`${ticketId}\`.`, { parse_mode: 'Markdown' });
-      await auditLog(ctx.from.id, 'TICKET_REPLIED', ticketId, 'SupportTicket');
+      await auditLog(ctx.from.id, 'TICKET_REPLIED', ticketId, 'System');
     } catch (err) {
       await ctx.reply(`❌ Failed to send reply: ${err.message}`);
     }
   });
 
-  // ── Text interceptor: legacy admin reply (from old flow) ──────────────────
+  // ── Text interceptor: legacy admin reply ──────────────────────────────────
   bot.on('text', async (ctx, next) => {
     const replyTarget = ctx.session?.adminReplyToUser;
-    if (!replyTarget || ctx.from.id !== config.bot.adminId) return next();
+    if (!replyTarget) return next();
+
+    const adminOk = await isAnyAdmin(ctx.from?.id);
+    if (!adminOk) return next();
 
     ctx.session.adminReplyToUser = null;
     try {
@@ -246,8 +257,7 @@ module.exports = function registerSupport(bot) {
   });
 
   // ── Admin reply button from old ticket notifications ───────────────────────
-  bot.action(/^reply_user:(\d+)$/, async (ctx) => {
-    if (ctx.from.id !== config.bot.adminId) return ctx.answerCbQuery('Access denied', { show_alert: true });
+  bot.action(/^reply_user:(\d+)$/, requireRole('STAFF'), async (ctx) => {
     const userId = parseInt(ctx.match[1], 10);
     ctx.session.adminReplyToUser = userId;
     await ctx.answerCbQuery();
