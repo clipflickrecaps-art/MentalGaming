@@ -16,7 +16,7 @@ const { config, validate }      = require('../config/settings');
 const { connectDB }             = require('./database');
 const { attachUser }            = require('./middlewares/authUser');
 const { antiSpam }              = require('./middlewares/antiSpam');
-const { errorHandler }          = require('./middlewares/errorHandler');
+const { errorHandler, setupGlobalErrorHandlers } = require('./middlewares/errorHandler');
 const { navigationMiddleware }  = require('./middlewares/navigationMiddleware');
 const { maintenanceCheck }      = require('./middlewares/maintenanceCheck');
 
@@ -75,6 +75,7 @@ function loadCommands(bot) {
     'feedback.js',          // ← Post-order feedback + review wall
     'apiManagement.js',     // ← External API / provider management + attribution analytics
     'analytics.js',         // ← Financial analytics dashboard + AI insights + sentiment
+    'sysinfo.js',           // ← /sysinfo resource monitor + /runbackup + /runcron + /flushcache
     'admin.js',
     'help.js',
     'ambient.js',           // ← LAST: catch-all ambient AI text handler
@@ -166,6 +167,11 @@ async function registerBotCommands() {
     { command: 'sentimentreport',description: '🧠 Sentiment Analysis (Manager+)' },
     { command: 'systemhealth',   description: '🖥 System Status (Manager+)' },
     { command: 'exportdetail',   description: '📥 Detailed CSV Export (Manager+)' },
+    { command: 'sysinfo',        description: '🖥 System Info & Resources (Manager+)' },
+    { command: 'runbackup',      description: '🗄 Run DB Backup Now (Owner)' },
+    { command: 'runcron',        description: '🔧 Run Maintenance Jobs (Owner)' },
+    { command: 'flushcache',     description: '🗃 Flush In-Memory Cache (Manager+)' },
+    { command: 'setbackupchan',  description: '🗄 Set Backup Channel (Owner)' },
     { command: 'setgateway',     description: '💳 Set Payment Gateway Status (Owner)' },
     { command: 'setgatewaynote', description: '📝 Set Gateway Note (Owner)' },
     { command: 'setannouncechannel', description: '📢 Set Announcement Channel (Owner)' },
@@ -220,6 +226,7 @@ async function bootstrap() {
   // Feedback watcher — every 60 min
   const { startFeedbackWatcher } = require('./services/FeedbackService');
   startFeedbackWatcher(bot.telegram);
+  console.log('[Bot] ✅ Feedback watcher started');
 
   // Sentiment watcher — every 60 min (runs alongside feedback watcher)
   const { runSentimentWatcherCycle } = require('./services/SentimentService');
@@ -238,6 +245,13 @@ async function bootstrap() {
 
   await bot.launch();
   await registerBotCommands();
+
+  // Global crash handler — must run AFTER launch so telegram client is ready
+  setupGlobalErrorHandlers(bot.telegram);
+
+  // Cron jobs — daily archive, promo purge, screenshot audit, cache flush, backup
+  const { startCronJobs } = require('./services/CronService');
+  startCronJobs(bot.telegram);
 
   // Webhook event processor — polls every 30s for events written by api-server
   const { startWebhookProcessor } = require('./services/WebhookProcessor');

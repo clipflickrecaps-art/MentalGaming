@@ -5,6 +5,7 @@
 const { Markup } = require('telegraf');
 const Nav = require('../services/NavigationService');
 const Product = require('../models/Product');
+const CacheService = require('../services/CacheService');
 const { loadingMessage, resolveMessage } = require('../utils/animations');
 const { buildMessage, price, truncate } = require('../utils/ui');
 
@@ -114,7 +115,7 @@ function buildProductFolder(id, title, category, parent) {
     id,
     title,
     build: async (ctx, theme) => {
-      const products = await Product.find({ category, isActive: true }).sort({ finalPrice: 1 });
+      const products = await CacheService.getCachedProducts(category);
 
       if (!products.length) {
         return {

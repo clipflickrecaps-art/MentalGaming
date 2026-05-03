@@ -1,6 +1,7 @@
 const axios = require('axios');
 const Currency = require('../models/Currency');
 const { previewCurrencyImpact, storeSuggestions } = require('./PriceCalculator');
+const CacheService = require('./CacheService');
 
 const SUPPORTED_CURRENCIES = ['BRL', 'PHP', 'USD'];
 const EXCHANGE_API_BASE = 'https://open.er-api.com/v6/latest/MMK';
@@ -22,6 +23,7 @@ async function fetchLiveRates() {
     updates.push({ code, rateToMMK: parseFloat(rateToMMK.toFixed(4)) });
   }
 
+  CacheService.invalidateRates(); // bust the 15-min cache on live fetch
   console.log('[CurrencyService] Live rates updated:', updates);
   return updates;
 }
@@ -44,6 +46,7 @@ async function updateRate(currencyCode, newRate, source = 'manual') {
   const previews = await previewCurrencyImpact(code, newRate);
   await storeSuggestions(previews);
 
+  CacheService.invalidateRates(); // bust cache whenever a rate changes
   console.log(`[CurrencyService] Rate updated: 1 ${code} = ${newRate} MMK | ${previews.length} products affected`);
 
   return { rateDoc, previews, affectedCount: previews.length };
@@ -57,10 +60,10 @@ async function getRate(code) {
 }
 
 /**
- * Get all stored rates.
+ * Get all stored rates — served from 15-min in-memory cache.
  */
 async function getAllRates() {
-  return Currency.find().sort({ currencyCode: 1 });
+  return CacheService.getCachedRates();
 }
 
 /**

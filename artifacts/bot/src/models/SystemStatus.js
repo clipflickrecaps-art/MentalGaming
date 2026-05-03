@@ -71,6 +71,13 @@ const systemStatusSchema = new mongoose.Schema(
       comment: 'Channel to forward new product alerts / flash sale announcements',
     },
 
+    // ── Backup Channel ─────────────────────────────────────────────────────────
+    backupChannelId: {
+      type:    String,
+      default: null,
+      comment: 'Private channel ID or @username to receive daily encrypted DB backups. Falls back to owner DM.',
+    },
+
     // ── Webhook Security ───────────────────────────────────────────────────────
     webhookSecret: {
       type:    String,
