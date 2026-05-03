@@ -70,6 +70,7 @@ function loadCommands(bot) {
     'adminOrders.js',
     'userManagement.js',
     'systemManagement.js',  // ← RBAC + maintenance + templates + pulse
+    'financialExport.js',   // ← CSV/financial reports (OWNER only)
     'admin.js',
     'help.js',
   ];
@@ -139,6 +140,7 @@ async function registerBotCommands() {
     // ── Owner only ────────────────────────────────────────────────────────────
     { command: 'admin',         description: '🔧 Admin Panel (Owner)' },
     { command: 'dashboard',     description: '📊 Dashboard (Owner)' },
+    { command: 'export',        description: '📊 Financial Export CSV (Owner)' },
     { command: 'pulse',         description: '📡 System Pulse (Owner)' },
     { command: 'addadmin',      description: '👑 Add Admin (Owner)' },
     { command: 'removeadmin',   description: '🗑 Remove Admin (Owner)' },
