@@ -80,6 +80,7 @@ function loadCommands(bot) {
     'sysinfo.js',           // ← /sysinfo resource monitor + /runbackup + /runcron + /flushcache
     'health.js',            // ← /checkhealth load test + /checkmodules
     'launch.js',            // ← /launchbroadcast + /setseason + /seasonlist + /previewseason
+    'trackOrder.js',        // ← /trackorder <shortId> — live status lookup + refresh
     'admin.js',
     'help.js',
     'ambient.js',           // ← LAST: catch-all ambient AI text handler

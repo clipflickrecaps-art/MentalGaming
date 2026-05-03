@@ -232,6 +232,7 @@ Daily schedule (Myanmar Time = UTC+6:30):
 | `/dashboard` | Owner | Admin dashboard |
 | `/setreftiers 1:2 6:3 16:5` | Owner | Set referral commission tiers (minRefs:rate pairs) |
 | `/reftiers` | Manager+ | View current referral tier table |
+| `/trackorder [shortId]` | All | Live order status card + 🔄 Refresh; admins see all active orders |
 
 ### Packages
 

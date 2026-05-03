@@ -16,10 +16,11 @@ const PAGE_SIZE = 8;
 
 // ── Status filter icon map ─────────────────────────────────────────────────────
 const STATUS_ICON = {
-  Pending:   '🟡',
-  Success:   '🟢',
-  Cancelled: '🔴',
-  Refunded:  '🔵',
+  Pending:    '🟡',
+  Processing: '🔵',
+  Success:    '🟢',
+  Cancelled:  '🔴',
+  Refunded:   '🔵',
 };
 
 // ── Build orders list text + keyboard ─────────────────────────────────────────
@@ -247,6 +248,9 @@ module.exports = function registerOrders(bot) {
 
       // ── Buttons ────────────────────────────────────────────────────────────
       const buttons = [];
+      if (['Pending', 'Processing'].includes(order.status)) {
+        buttons.push([Markup.button.callback('📍 Track Live Status', `track_show:${orderId}`)]);
+      }
       if (order.status === 'Pending') {
         buttons.push([Markup.button.callback('❌ Cancel This Order', `user_cancel_order:${orderId}`)]);
       }
