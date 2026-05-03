@@ -182,6 +182,15 @@ Every order generates a status thread in the customer's Telegram chat:
 
 Order model additions: `status` enum now includes `'Processing'`; new fields `trackingMsgId: Number` and `statusHistory: [{status, at, byAdminId, note}]`.
 
+#### Stale-Order Support Prompt
+
+Configurable via `SystemStatus.orderSupportThresholdMinutes` (default: 30).
+
+- `ageMinutes(order)` measures time since the **last** `statusHistory` entry (or `order.timestamp` if no history), so the clock resets when admin marks Processing
+- When `age >= threshold` AND order is Pending/Processing → `[⚠️ Contact Support]` button appears on the tracking card + a warning line in the card text
+- Tapping it calls `autoEscalate()` which: deduplicates (no second ticket for the same order), creates a `SupportTicket` (`topic: order`, `priority: High`), notifies admin with full ticket keyboard, and confirms to the customer with the ticket ID
+- `/setstalesupport <minutes>` (Owner) — update threshold; `/setstalesupport` with no args shows current value and usage
+
 ### SRE Systems (Performance, Automation, Backup)
 
 #### CacheService (`services/CacheService.js`)
@@ -232,7 +241,8 @@ Daily schedule (Myanmar Time = UTC+6:30):
 | `/dashboard` | Owner | Admin dashboard |
 | `/setreftiers 1:2 6:3 16:5` | Owner | Set referral commission tiers (minRefs:rate pairs) |
 | `/reftiers` | Manager+ | View current referral tier table |
-| `/trackorder [shortId]` | All | Live order status card + 🔄 Refresh; admins see all active orders |
+| `/trackorder [shortId]` | All | Live order status card + 🔄 Refresh + ⚠️ Support prompt after threshold |
+| `/setstalesupport <min>` | Owner | Set minutes before [Contact Support] button appears on stale orders |
 
 ### Packages
 

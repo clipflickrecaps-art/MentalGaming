@@ -101,6 +101,13 @@ const systemStatusSchema = new mongoose.Schema(
       comment: 'Custom greeting shown in welcome message',
     },
 
+    // ── Stale-Order Support Prompt ────────────────────────────────────────────
+    orderSupportThresholdMinutes: {
+      type:    Number,
+      default: 30,
+      comment: 'Minutes a Pending/Processing order must wait before the [Contact Support] button appears on the tracking card',
+    },
+
     // ── Referral Tier System ──────────────────────────────────────────────────
     referralTiers: {
       type: [{
