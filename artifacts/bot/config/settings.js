@@ -2,7 +2,7 @@ require('dotenv').config();
 
 const config = {
   bot: {
-    token: process.env.BOT_TOKEN,
+    token:   process.env.BOT_TOKEN,
     adminId: Number(process.env.ADMIN_ID),
   },
   db: {
@@ -15,12 +15,23 @@ const config = {
     tiers: ['Silver', 'Gold', 'Platinum'],
   },
   currency: {
-    base: 'MMK',
+    base:      'MMK',
     supported: ['BRL', 'PHP', 'USD'],
   },
   antiSpam: {
     maxRequestsPerMinute: 10,
-    warningThreshold: 3,
+    warningThreshold:     3,
+  },
+  // ── Referral defaults (overridable live via SystemStatus in MongoDB) ─────────
+  // These are fallback values only; the live source of truth is SystemStatus.
+  referral: {
+    commissionRate:      2,      // % of top-up amount paid to referrer
+    commissionMode:      'first', // 'first' | 'every'
+    commissionType:      'KS',   // 'KS' | 'Coin' | 'Both'
+    minTopupForReward:   1000,   // minimum top-up amount to trigger commission
+    velocityLimit:       10,     // max new referrals per code per hour (fraud threshold)
+    welcomeBonusKS:      200,    // fixed KS for referee on first top-up
+    welcomeBonusCoins:   50,     // fixed coins for referee on first top-up
   },
 };
 

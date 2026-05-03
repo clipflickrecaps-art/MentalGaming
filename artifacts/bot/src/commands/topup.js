@@ -5,7 +5,7 @@
 const { Markup } = require('telegraf');
 const { adminOnly } = require('../middlewares/adminCheck');
 const { approveTopup, rejectTopup, getHistory, calcCoinBonus } = require('../services/WalletService');
-const { processFirstTopup } = require('../services/ReferralService');
+const { processTopupCommission } = require('../services/ReferralService');
 const { checkAndUpgradeTier } = require('../services/MembershipService');
 const { checklist } = require('../utils/animations');
 const { auditLog } = require('../services/logger');
@@ -75,9 +75,9 @@ module.exports = function registerTopup(bot) {
 
       await auditLog(ctx.from.id, 'TOPUP_APPROVED', txId, 'Transaction', { amountKS, bonusCoins });
 
-      // ── Process referral bonus on first top-up ──────────────────────────
-      processFirstTopup(user._id, amountKS, ctx.telegram).catch((err) =>
-        console.error('[Topup] Referral processing error:', err.message)
+      // ── Process referral commission (first or every-topup mode) ────────
+      processTopupCommission(user._id, amountKS, ctx.telegram).catch((err) =>
+        console.error('[Topup] Referral commission error:', err.message)
       );
 
       // ── Check & upgrade membership tier ─────────────────────────────────
