@@ -53,6 +53,17 @@ const systemStatusSchema = new mongoose.Schema(
       comment: 'Master switch for the automated feedback watcher',
     },
 
+    // ── Payment Gateway Status (admin-controlled, shown to users in /topup) ──
+    kpayStatus: { type: String, enum: ['Online', 'Busy', 'Offline'], default: 'Online' },
+    waveStatus: { type: String, enum: ['Online', 'Busy', 'Offline'], default: 'Online' },
+    ayaStatus:  { type: String, enum: ['Online', 'Busy', 'Offline'], default: 'Online' },
+    cbStatus:   { type: String, enum: ['Online', 'Busy', 'Offline'], default: 'Online' },
+    gatewayNote: {
+      type:    String,
+      default: null,
+      comment: 'Optional message shown alongside gateway status (e.g. "KPay slow due to bank maintenance")',
+    },
+
     // ── Product Announcement Channel ──────────────────────────────────────────
     announcementChannelId: {
       type:    String,

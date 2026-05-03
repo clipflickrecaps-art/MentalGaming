@@ -39,6 +39,15 @@ const reviewSchema = new mongoose.Schema(
     forwardedToChannel: { type: Boolean, default: false },
     channelMessageId:   { type: Number,  default: null },
 
+    // ── AI Sentiment Analysis ─────────────────────────────────────────────────
+    sentimentLabel: {
+      type:    String,
+      enum:    ['positive', 'neutral', 'negative'],
+      default: null,
+      index:   true,
+    },
+    sentimentAnalyzedAt: { type: Date, default: null },
+
     // ── Timing ────────────────────────────────────────────────────────────────
     feedbackRequestSentAt: { type: Date, default: null },
     respondedAt:           { type: Date, default: null },

@@ -74,6 +74,7 @@ function loadCommands(bot) {
     'faq.js',               // ← FAQ library + video tutorials
     'feedback.js',          // ← Post-order feedback + review wall
     'apiManagement.js',     // ← External API / provider management + attribution analytics
+    'analytics.js',         // ← Financial analytics dashboard + AI insights + sentiment
     'admin.js',
     'help.js',
     'ambient.js',           // ← LAST: catch-all ambient AI text handler
@@ -159,6 +160,14 @@ async function registerBotCommands() {
     { command: 'testapi',            description: '🧪 Test Provider Connection (Manager+)' },
     { command: 'adminproducts',      description: '📦 Products & Delivery Modes (Manager+)' },
     { command: 'joinsources',        description: '📊 User Attribution Stats (Manager+)' },
+    { command: 'analytics',      description: '📊 Analytics Dashboard (Manager+)' },
+    { command: 'analyticsai',    description: '🤖 AI Business Report (Manager+)' },
+    { command: 'forecast',       description: '🔮 7-Day Sales Forecast (Manager+)' },
+    { command: 'sentimentreport',description: '🧠 Sentiment Analysis (Manager+)' },
+    { command: 'systemhealth',   description: '🖥 System Status (Manager+)' },
+    { command: 'exportdetail',   description: '📥 Detailed CSV Export (Manager+)' },
+    { command: 'setgateway',     description: '💳 Set Payment Gateway Status (Owner)' },
+    { command: 'setgatewaynote', description: '📝 Set Gateway Note (Owner)' },
     { command: 'setannouncechannel', description: '📢 Set Announcement Channel (Owner)' },
     { command: 'announce',           description: '📣 Broadcast Product to Channel (Manager+)' },
     { command: 'webhookstats',       description: '📡 Webhook Event Stats (Owner)' },
@@ -211,6 +220,14 @@ async function bootstrap() {
   // Feedback watcher — every 60 min
   const { startFeedbackWatcher } = require('./services/FeedbackService');
   startFeedbackWatcher(bot.telegram);
+
+  // Sentiment watcher — every 60 min (runs alongside feedback watcher)
+  const { runSentimentWatcherCycle } = require('./services/SentimentService');
+  const SENTIMENT_INTERVAL_MS = 60 * 60_000;
+  // Initial scan 2 min after startup (don't block launch)
+  setTimeout(() => runSentimentWatcherCycle(bot.telegram), 2 * 60_000);
+  setInterval(() => runSentimentWatcherCycle(bot.telegram), SENTIMENT_INTERVAL_MS);
+  console.log('[Bot] ✅ Sentiment watcher scheduled');
 
   // Seed default FAQs if collection is empty
   const { seedDefaultFAQs } = require('./services/FAQService');
