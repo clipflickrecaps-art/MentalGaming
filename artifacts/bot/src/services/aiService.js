@@ -5,6 +5,7 @@
  *   generateProductDescription() — short copy for shop listings
  *   buildSupportContext()        — assemble user + store context for support AI
  *   answerSupportQuery()         — full AI support response with escalation signal
+ *   answerAmbientQuery()         — conversational AI for non-command chat messages
  *   analyzeSentiment()           — detect frustration for auto-escalation
  */
 
@@ -75,7 +76,7 @@ REFUND POLICY: Full refund to wallet if admin cancels the order
 PROMO CODES: Applied at checkout step in /shop
 FLASH SALES: Time-limited discounts shown with countdown timer
 
-COMMANDS: /shop /orders /wallet /topup /history /spin /promo /myids /support /profile
+COMMANDS: /shop /orders /wallet /topup /history /spin /promo /myids /support /profile /faq
 `;
 
 // ── Build per-user context string ─────────────────────────────────────────────
@@ -122,12 +123,16 @@ const TOPIC_GUIDANCE = {
 async function answerSupportQuery(userMessage, { telegramId = null, topic = 'general', history = [] } = {}) {
   if (!config.ai.apiKey) return { answer: null, shouldEscalate: true };
 
-  const userContext = telegramId ? await buildUserContext(telegramId) : '';
+  const [userContext, faqContext] = await Promise.all([
+    telegramId ? buildUserContext(telegramId) : Promise.resolve(''),
+    loadFAQContext(),
+  ]);
   const topicGuide  = TOPIC_GUIDANCE[topic] || TOPIC_GUIDANCE.general;
 
   const systemPrompt =
     `You are a friendly, concise AI support agent for Mental Gaming Store — a Telegram-based gaming store in Myanmar.\n` +
     `\n${STORE_KNOWLEDGE}\n` +
+    `${faqContext}\n` +
     `${userContext}\n` +
     `CURRENT TOPIC: ${topic.toUpperCase()}\n` +
     `TOPIC GUIDANCE: ${topicGuide}\n` +
@@ -156,6 +161,63 @@ async function answerSupportQuery(userMessage, { telegramId = null, topic = 'gen
   } catch (err) {
     console.error('[AIService] Support query failed:', err.message);
     return { answer: null, shouldEscalate: true };
+  }
+}
+
+// ── Ambient conversational AI (for non-command messages) ─────────────────────
+//
+// Lighter-weight than the full support flow — handles casual queries,
+// quick FAQs, and product questions directly in chat.
+// If the issue needs human help, suggests [🎫 Open Support Ticket].
+
+async function answerAmbientQuery(userMessage, { telegramId = null, history = [] } = {}) {
+  if (!config.ai.apiKey) return { answer: null, shouldOpenTicket: false };
+
+  const [userContext, faqContext] = await Promise.all([
+    telegramId ? buildUserContext(telegramId) : Promise.resolve(''),
+    loadFAQContext(),
+  ]);
+
+  const systemPrompt =
+    `You are a helpful, friendly AI assistant for Mental Gaming Store — a Telegram gaming top-up store in Myanmar.\n` +
+    `You answer quick questions in the main chat (not in a support ticket flow).\n\n` +
+    `${STORE_KNOWLEDGE}\n` +
+    `${faqContext}\n` +
+    `${userContext}\n` +
+    `RULES:\n` +
+    `- Keep responses SHORT — max 3 sentences or 80 words\n` +
+    `- Be warm, casual, and helpful — like a knowledgeable friend\n` +
+    `- Suggest specific commands when relevant (/shop, /topup, /orders, /faq, etc.)\n` +
+    `- If the user has a complex issue, account problem, or needs admin action, end with exactly: [OPEN_TICKET]\n` +
+    `- Never fabricate prices, order details, or account info\n` +
+    `- If you genuinely don't know, say so briefly and suggest /faq or /support`;
+
+  try {
+    const raw = await callGemini(systemPrompt, userMessage, {
+      maxTokens: 200,
+      temperature: 0.6,
+      history,
+    });
+
+    if (!raw) return { answer: null, shouldOpenTicket: false };
+
+    const shouldOpenTicket = raw.includes('[OPEN_TICKET]');
+    const answer = raw.replace('[OPEN_TICKET]', '').trim();
+
+    return { answer, shouldOpenTicket };
+  } catch (err) {
+    console.error('[AIService] Ambient query failed:', err.message);
+    return { answer: null, shouldOpenTicket: false };
+  }
+}
+
+// ── Lazy-load FAQ context to avoid circular requires ─────────────────────────
+async function loadFAQContext() {
+  try {
+    const { buildFAQContext } = require('./FAQService');
+    return await buildFAQContext();
+  } catch {
+    return '';
   }
 }
 
@@ -194,6 +256,7 @@ async function generateProductDescription(productName, category, region) {
 
 module.exports = {
   answerSupportQuery,
+  answerAmbientQuery,
   generateProductDescription,
   analyzeSentiment,
   buildUserContext,

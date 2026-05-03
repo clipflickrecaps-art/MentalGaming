@@ -32,49 +32,25 @@ const systemStatusSchema = new mongoose.Schema(
     },
 
     // ── Referral Program Config ────────────────────────────────────────────────
-    referralEnabled: {
+    referralEnabled: { type: Boolean, default: true },
+    referralCommissionRate: { type: Number, default: 2, min: 0, max: 50 },
+    referralCommissionMode: { type: String, enum: ['first', 'every'], default: 'first' },
+    referralCommissionType: { type: String, enum: ['KS', 'Coin', 'Both'], default: 'KS' },
+    referralMinTopup:       { type: Number, default: 1000 },
+    referralVelocityLimit:  { type: Number, default: 10 },
+    referralWelcomeBonusKS:    { type: Number, default: 200 },
+    referralWelcomeBonusCoins: { type: Number, default: 50 },
+
+    // ── Feedback & Review Channel ──────────────────────────────────────────────
+    feedbackChannelId: {
+      type: String,
+      default: null,
+      comment: 'Telegram channel ID or @username where 4-5★ reviews are forwarded',
+    },
+    feedbackEnabled: {
       type: Boolean,
       default: true,
-      comment: 'Master switch for the referral program',
-    },
-    referralCommissionRate: {
-      type: Number,
-      default: 2,
-      min: 0,
-      max: 50,
-      comment: 'Percentage of referred friend\'s top-up amount (e.g. 2 = 2%)',
-    },
-    referralCommissionMode: {
-      type: String,
-      enum: ['first', 'every'],
-      default: 'first',
-      comment: 'first = pay once on first top-up | every = pay on every top-up',
-    },
-    referralCommissionType: {
-      type: String,
-      enum: ['KS', 'Coin', 'Both'],
-      default: 'KS',
-      comment: 'Which wallet receives the commission',
-    },
-    referralMinTopup: {
-      type: Number,
-      default: 1000,
-      comment: 'Minimum top-up amount for commission to trigger',
-    },
-    referralVelocityLimit: {
-      type: Number,
-      default: 10,
-      comment: 'Max new referrals from one code per hour before fraud alert',
-    },
-    referralWelcomeBonusKS: {
-      type: Number,
-      default: 200,
-      comment: 'Fixed KS bonus for the new user (referee) on first top-up',
-    },
-    referralWelcomeBonusCoins: {
-      type: Number,
-      default: 50,
-      comment: 'Fixed Mental Coins bonus for the new user (referee) on first top-up',
+      comment: 'Master switch for the automated feedback watcher',
     },
 
     // ── Meta ───────────────────────────────────────────────────────────────────

@@ -71,8 +71,11 @@ function loadCommands(bot) {
     'userManagement.js',
     'systemManagement.js',  // ← RBAC + maintenance + templates + pulse
     'financialExport.js',   // ← CSV/financial reports (OWNER only)
+    'faq.js',               // ← FAQ library + video tutorials
+    'feedback.js',          // ← Post-order feedback + review wall
     'admin.js',
     'help.js',
+    'ambient.js',           // ← LAST: catch-all ambient AI text handler
   ];
 
   const sorted = [
@@ -114,6 +117,8 @@ async function registerBotCommands() {
     { command: 'myids',         description: '📖 Saved Game IDs' },
     { command: 'saveid',        description: '➕ Save a Game ID' },
     { command: 'deleteid',      description: '🗑 Delete a Game ID' },
+    { command: 'faq',           description: '📚 FAQ & Help Center' },
+    { command: 'reviews',       description: '🌟 Customer Reviews' },
     { command: 'support',       description: '💬 AI Customer Support' },
     { command: 'mytickets',     description: '🎫 My Support Tickets' },
     { command: 'myrole',        description: '🔹 My Admin Role' },
@@ -125,6 +130,8 @@ async function registerBotCommands() {
     { command: 'tickets',       description: '🎫 Support Tickets (Staff+)' },
     { command: 'closeticket',   description: '⚫ Close a Ticket (Staff+)' },
     { command: 'templates',     description: '📜 Quick-Reply Templates (Staff+)' },
+    { command: 'feedbackstats', description: '📊 Feedback Statistics (Staff+)' },
+    { command: 'listfaqs',      description: '📋 List All FAQs (Staff+)' },
     // ── Manager+ ──────────────────────────────────────────────────────────────
     { command: 'addcodes',      description: '🎁 Add Digital Codes (Manager+)' },
     { command: 'flashsale',     description: '🔥 Activate Flash Sale (Manager+)' },
@@ -136,8 +143,13 @@ async function registerBotCommands() {
     { command: 'createpromo',   description: '🎟 Create Promo Code (Manager+)' },
     { command: 'listpromos',    description: '📋 List Promo Codes (Manager+)' },
     { command: 'deletepromo',   description: '🗑 Deactivate Promo (Manager+)' },
-    { command: 'broadcast',     description: '📢 Broadcast Message (Manager+)' },
-    { command: 'refstats',      description: '📊 Referral Stats (Manager+)' },
+    { command: 'broadcast',          description: '📢 Broadcast Message (Manager+)' },
+    { command: 'addfaq',             description: '➕ Add FAQ Entry (Manager+)' },
+    { command: 'deletefaq',          description: '🗑 Delete FAQ Entry (Manager+)' },
+    { command: 'addfaqvideo',        description: '🎬 Add Video Tutorial to FAQ (Manager+)' },
+    { command: 'setfeedbackchannel', description: '📢 Set Review Channel (Manager+)' },
+    { command: 'togglefeedback',     description: '🔛 Toggle Feedback Watcher (Manager+)' },
+    { command: 'refstats',           description: '📊 Referral Stats (Manager+)' },
     { command: 'reffraud',      description: '⚠️ Fraud Flags (Manager+)' },
     // ── Owner only ────────────────────────────────────────────────────────────
     { command: 'admin',         description: '🔧 Admin Panel (Owner)' },
@@ -184,6 +196,14 @@ async function bootstrap() {
   const { startFlashSaleWatcher } = require('./services/FlashSaleService');
   startFlashSaleWatcher(bot.telegram);
   console.log('[Bot] ✅ Flash sale watcher started');
+
+  // Feedback watcher — every 60 min
+  const { startFeedbackWatcher } = require('./services/FeedbackService');
+  startFeedbackWatcher(bot.telegram);
+
+  // Seed default FAQs if collection is empty
+  const { seedDefaultFAQs } = require('./services/FAQService');
+  await seedDefaultFAQs();
 
   process.on('SIGINT',  () => { bot.stop('SIGINT');  process.exit(0); });
   process.on('SIGTERM', () => { bot.stop('SIGTERM'); process.exit(0); });
