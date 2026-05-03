@@ -11,7 +11,8 @@
 
 const { Markup } = require('telegraf');
 const { requireRole, isAnyAdmin } = require('../middlewares/adminCheck');
-const { completeOrder, cancelAndRefund } = require('../services/OrderService');
+const { completeOrder, cancelAndRefund, markProcessing } = require('../services/OrderService');
+const OrderTrackingService = require('../services/OrderTrackingService');
 const { issueWarning } = require('../services/PenaltyService');
 const { checklist } = require('../utils/animations');
 const { auditLog } = require('../services/logger');
@@ -77,11 +78,14 @@ function orderSummaryText(order) {
 
 function adminOrderActionKeyboard(orderId) {
   return Markup.inlineKeyboard([
-    [Markup.button.callback('✅ Complete', `admin_complete:${orderId}`)],
+    [
+      Markup.button.callback('✅ Complete',        `admin_complete:${orderId}`),
+      Markup.button.callback('🔄 Processing',      `admin_processing:${orderId}`),
+    ],
     [Markup.button.callback('❌ Cancel & Refund', `admin_cancel_refund:${orderId}`)],
     [
-      Markup.button.callback('💬 Message', `admin_msg_user:${orderId}`),
-      Markup.button.callback('⚠️ Warn User', `admin_warn_user:${orderId}`),
+      Markup.button.callback('💬 Message',         `admin_msg_user:${orderId}`),
+      Markup.button.callback('⚠️ Warn User',       `admin_warn_user:${orderId}`),
     ],
     [Markup.button.callback('📜 Use Template', `tpl_pick:order:${orderId}`)],
   ]);
@@ -96,6 +100,38 @@ async function notifyCustomer(ctx, telegramId, text, extra = {}) {
 }
 
 module.exports = function registerAdminOrders(bot) {
+
+  // ── 🔄 Mark Processing ────────────────────────────────────────────────────
+  bot.action(/^admin_processing:(.+)$/, requireRole('STAFF'), async (ctx) => {
+    const orderId = ctx.match[1];
+    await ctx.answerCbQuery('Marking as Processing…');
+
+    const order = await Order.findById(orderId).populate('userId').populate('productId');
+    if (!order) return ctx.reply('❌ Order not found.');
+    if (order.status === 'Processing') return ctx.answerCbQuery('Already marked as Processing', { show_alert: true });
+    if (order.status !== 'Pending')    return ctx.answerCbQuery(`Order is already ${order.status}`, { show_alert: true });
+
+    const updated    = await markProcessing(orderId, ctx.from.id);
+    const userTid    = order.userId?.telegramId;
+    const shortId    = orderId.slice(-8).toUpperCase();
+
+    if (userTid) {
+      try {
+        const trackMsg = await OrderTrackingService.sendProcessing(ctx.telegram, userTid, updated);
+        if (trackMsg?.message_id) {
+          await Order.findByIdAndUpdate(orderId, { trackingMsgId: trackMsg.message_id });
+        }
+      } catch (e) {
+        console.error('[AdminOrders] Tracking update failed:', e.message);
+      }
+    }
+
+    await ctx.reply(
+      `🔄 *Order \`${shortId}\` — Marked as Processing*\n\n` +
+      `👤 Customer has been notified with a live status update.`,
+      { parse_mode: 'Markdown', ...adminOrderActionKeyboard(orderId) }
+    );
+  });
 
   // ── View order details ─────────────────────────────────────────────────────
   bot.action(/^admin_order_view:(.+)$/, requireRole('STAFF'), async (ctx) => {
@@ -159,10 +195,16 @@ module.exports = function registerAdminOrders(bot) {
 
         const customerTid = completedOrder.userId?.telegramId;
         if (customerTid) {
-          await notifyCustomer(ctx, customerTid,
-            buildReceipt(completedOrder, completedOrder.deliveredData),
-            { parse_mode: 'MarkdownV2' }
-          );
+          try {
+            const trackMsg = await OrderTrackingService.sendDeliveredReceipt(
+              ctx.telegram, customerTid, completedOrder, completedOrder.deliveredData
+            );
+            if (trackMsg?.message_id) {
+              await Order.findByIdAndUpdate(completedOrder._id, { trackingMsgId: trackMsg.message_id });
+            }
+          } catch (e) {
+            await notifyCustomer(ctx, customerTid, `✅ *Order Complete!*\n\n📬 Your delivery:\n\`${completedOrder.deliveredData}\``);
+          }
         }
       } catch (err) {
         await ctx.telegram.editMessageText(ref.chatId, ref.messageId, undefined, `❌ ${err.message}`);
@@ -245,14 +287,18 @@ module.exports = function registerAdminOrders(bot) {
 
         const customerTid = order.userId?.telegramId;
         if (customerTid) {
-          await notifyCustomer(ctx, customerTid,
-            buildReceipt(order, input),
-            { parse_mode: 'MarkdownV2' }
-          );
+          try {
+            const trackMsg = await OrderTrackingService.sendDeliveredReceipt(ctx.telegram, customerTid, order, input);
+            if (trackMsg?.message_id) {
+              await Order.findByIdAndUpdate(order._id, { trackingMsgId: trackMsg.message_id });
+            }
+          } catch (e) {
+            await notifyCustomer(ctx, customerTid, `✅ *Order Complete!*\n\n📬 Delivery:\n\`${input}\``);
+          }
         }
 
         await ctx.reply(
-          `✅ Order \`${orderId.slice(-8).toUpperCase()}\` completed. Receipt sent to customer.`,
+          `✅ Order \`${orderId.slice(-8).toUpperCase()}\` completed. Tracking receipt sent to customer.`,
           { parse_mode: 'Markdown' }
         );
 
@@ -268,13 +314,13 @@ module.exports = function registerAdminOrders(bot) {
 
         const customerTid = order.userId?.telegramId;
         if (customerTid) {
-          await notifyCustomer(ctx, customerTid,
-            `❌ *Your order has been cancelled.*\n\n` +
-            `📦 *${order.productId?.name || 'Your order'}*\n` +
-            `💰 Refund: *${price(order.amount)}* returned to your wallet\n` +
-            `📝 Reason: ${input}\n\n` +
-            `_Contact /support if you have questions._`
-          );
+          try {
+            await OrderTrackingService.sendCancelled(ctx.telegram, customerTid, order, input);
+          } catch (e) {
+            await notifyCustomer(ctx, customerTid,
+              `❌ *Order Cancelled*\n\n💰 *${price(order.amount)}* refunded to your wallet\n📝 Reason: ${input}`
+            );
+          }
         }
 
         await ctx.reply(

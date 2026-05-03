@@ -53,6 +53,38 @@ function getReferralLink(code) {
   return `https://t.me/mentalgamingstorebot?start=ref_${code}`;
 }
 
+// ── Referral tier helpers ─────────────────────────────────────────────────────
+
+const DEFAULT_TIERS = [
+  { minRefs: 1,  rate: 2, label: 'Bronze', emoji: '🥉' },
+  { minRefs: 6,  rate: 3, label: 'Silver', emoji: '🥈' },
+  { minRefs: 16, rate: 5, label: 'Gold',   emoji: '🥇' },
+];
+
+/**
+ * Resolves the current and next commission tier for a referrer.
+ * @param {number} completedCount  — number of Active+Completed referrals
+ * @param {Array}  tiers           — from SystemStatus.referralTiers (may be empty)
+ */
+function resolveTierInfo(completedCount, tiers) {
+  const pool   = (tiers && tiers.length) ? tiers : DEFAULT_TIERS;
+  const sorted = [...pool].sort((a, b) => b.minRefs - a.minRefs); // desc → find highest match first
+
+  let currentTier = null;
+  for (const t of sorted) {
+    if (completedCount >= t.minRefs) { currentTier = t; break; }
+  }
+
+  // Next tier = first tier above currentTier (ascending)
+  const ascending   = [...pool].sort((a, b) => a.minRefs - b.minRefs);
+  const currentIdx  = currentTier ? ascending.findIndex((t) => t.minRefs === currentTier.minRefs) : -1;
+  const nextTier    = currentIdx >= 0
+    ? ascending[currentIdx + 1] || null
+    : ascending[0] || null;            // no current tier yet → show first as "next"
+
+  return { currentTier, nextTier };
+}
+
 // ── Masked username helper ────────────────────────────────────────────────────
 
 function maskName(username, firstName) {
@@ -152,8 +184,18 @@ async function processTopupCommission(userId, topupAmount, telegram) {
   // Rapid topup fraud check (LOW severity — logged but doesn't block)
   await checkTopupFraud(referral, telegram);
 
-  // ── Calculate commission ─────────────────────────────────────────────────
-  const rate           = referral.commissionRate || status.referralCommissionRate || 2;
+  // ── Tier-based dynamic commission rate ───────────────────────────────────
+  const completedBefore = await Referral.countDocuments({
+    referrerId: referrer._id,
+    status:    { $in: ['Completed', 'Active'] },
+    _id:       { $ne: referral._id },
+  });
+  const thisIsRefN          = completedBefore + 1;
+  const { currentTier }     = resolveTierInfo(thisIsRefN, status.referralTiers);
+  const { currentTier: prevTier } = resolveTierInfo(completedBefore, status.referralTiers);
+  const tierLevelUp         = currentTier && (!prevTier || currentTier.minRefs !== prevTier.minRefs);
+
+  const rate           = currentTier ? currentTier.rate : (referral.commissionRate || status.referralCommissionRate || 2);
   const commissionKS   = Math.floor(topupAmount * rate / 100);
   const commissionType = status.referralCommissionType || 'KS';
 
@@ -226,15 +268,27 @@ async function processTopupCommission(userId, topupAmount, telegram) {
     rate,
   });
 
-  // ── Notify referrer ────────────────────────────────────────────────────────
+  // ── Notify referrer (with tier badge) ────────────────────────────────────
   if (telegram) {
-    const refereeTag = referee.username ? `@${referee.username}` : `your friend`;
+    const refereeTag   = referee.username ? `@${referee.username}` : `your friend`;
+    const tierBadge    = currentTier
+      ? `${currentTier.emoji} *${currentTier.label} Referrer* (${rate}%)`
+      : `${rate}% commission`;
+    const levelUpLine  = tierLevelUp
+      ? `\n🆙 *You've reached ${currentTier.emoji} ${currentTier.label} tier!*\n`
+      : '';
+    const { nextTier } = resolveTierInfo(thisIsRefN, status.referralTiers);
+    const nextLine     = nextTier && !tierLevelUp
+      ? `\n_${nextTier.minRefs - thisIsRefN} more referral${nextTier.minRefs - thisIsRefN !== 1 ? 's' : ''} to reach ${nextTier.emoji} ${nextTier.label} (${nextTier.rate}%)_`
+      : '';
     try {
       await telegram.sendMessage(
         referrer.telegramId,
         `🎉 *Referral Commission Earned!*\n\n` +
-        `${refereeTag} just topped up!\n\n` +
+        `${refereeTag} just topped up!\n` +
+        `🏅 ${tierBadge}${levelUpLine}\n` +
         `💰 Commission (${rate}%): *+${commissionKS.toLocaleString()} ${commissionType === 'Coin' ? 'MC' : 'KS'}*\n` +
+        nextLine + `\n` +
         (referral.commissionMode === 'every'
           ? `_You keep earning every time they top up. /referral_`
           : `_Share your link to earn more! /referral_`),
@@ -281,6 +335,7 @@ async function getStats(telegramId) {
     Referral.countDocuments({ referrerId: user._id, status: 'Active' }),
     Referral.countDocuments({ referrerId: user._id, isFraudSuspected: true }),
   ]);
+  const completedCount = completed + active;
 
   // Sum total commissions earned
   const agg = await Referral.aggregate([
@@ -296,6 +351,8 @@ async function getStats(telegramId) {
     .sort({ createdAt: -1 })
     .limit(8);
 
+  const { currentTier, nextTier } = resolveTierInfo(completedCount, status.referralTiers);
+
   return {
     code,
     link:        getReferralLink(code),
@@ -304,9 +361,12 @@ async function getStats(telegramId) {
     pending,
     active,
     frozen,
+    completedCount,
+    tier:            currentTier,
+    nextTier,
     totalKSEarned:    earned.totalKS,
     totalCoinsEarned: earned.totalCoins,
-    commissionRate:   status.referralCommissionRate || 2,
+    commissionRate:   currentTier ? currentTier.rate : (status.referralCommissionRate || 2),
     commissionMode:   status.referralCommissionMode || 'first',
     commissionType:   status.referralCommissionType || 'KS',
     referralEnabled:  status.referralEnabled,
@@ -398,4 +458,6 @@ module.exports = {
   getLeaderboard,
   adminAdjustCommission,
   maskName,
+  resolveTierInfo,
+  DEFAULT_TIERS,
 };

@@ -118,11 +118,26 @@ async function createOrder(telegramId, productId, { gameId = null, zoneId = null
   return { order, product, user };
 }
 
+// ── Mark order as Processing ──────────────────────────────────────────────────
+async function markProcessing(orderId, adminId) {
+  const order = await Order.findById(orderId).populate('userId').populate('productId');
+  if (!order) throw new Error('Order not found');
+  if (order.status === 'Processing') throw new Error('Order is already Processing');
+  if (order.status !== 'Pending') throw new Error(`Cannot mark Processing — order is ${order.status}`);
+
+  order.status = 'Processing';
+  order.statusHistory.push({ status: 'Processing', at: new Date(), byAdminId: adminId });
+  await order.save();
+
+  await auditLog(adminId, 'ORDER_MARK_PROCESSING', orderId, 'Order', {});
+  return order;
+}
+
 // ── Complete order — admin triggered ─────────────────────────────────────────
 async function completeOrder(orderId, adminId, deliveredData, telegram) {
   const order = await Order.findById(orderId).populate('userId').populate('productId');
   if (!order) throw new Error('Order not found');
-  if (order.status !== 'Pending') throw new Error(`Order is already ${order.status}`);
+  if (!['Pending', 'Processing'].includes(order.status)) throw new Error(`Order is already ${order.status}`);
 
   let finalDelivery = deliveredData;
 
@@ -137,6 +152,7 @@ async function completeOrder(orderId, adminId, deliveredData, telegram) {
   order.status = 'Success';
   order.deliveredData = finalDelivery;
   order.processedBy = adminId;
+  order.statusHistory.push({ status: 'Success', at: new Date(), byAdminId: adminId, note: 'Delivered' });
   await order.save();
 
   // Stock warning after completion
@@ -158,6 +174,7 @@ async function cancelAndRefund(orderId, adminId, reason) {
   order.status = 'Cancelled';
   order.cancelReason = reason;
   order.processedBy = adminId;
+  order.statusHistory.push({ status: 'Cancelled', at: new Date(), byAdminId: adminId, note: reason });
   await order.save();
 
   // Refund KS
@@ -202,6 +219,7 @@ async function addDigitalCodes(productId, codes, adminId) {
 
 module.exports = {
   createOrder,
+  markProcessing,
   completeOrder,
   cancelAndRefund,
   checkStockWarning,

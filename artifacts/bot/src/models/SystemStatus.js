@@ -101,6 +101,22 @@ const systemStatusSchema = new mongoose.Schema(
       comment: 'Custom greeting shown in welcome message',
     },
 
+    // ── Referral Tier System ──────────────────────────────────────────────────
+    referralTiers: {
+      type: [{
+        minRefs: { type: Number },
+        rate:    { type: Number },
+        label:   { type: String },
+        emoji:   { type: String, default: '🏅' },
+      }],
+      default: () => [
+        { minRefs: 1,  rate: 2, label: 'Bronze', emoji: '🥉' },
+        { minRefs: 6,  rate: 3, label: 'Silver', emoji: '🥈' },
+        { minRefs: 16, rate: 5, label: 'Gold',   emoji: '🥇' },
+      ],
+      comment: 'Escalating commission rates based on number of successful referrals',
+    },
+
     // ── Webhook Security ───────────────────────────────────────────────────────
     webhookSecret: {
       type:    String,

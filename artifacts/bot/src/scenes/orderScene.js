@@ -14,6 +14,8 @@ const { Scenes, Markup } = require('telegraf');
 const { config } = require('../../config/settings');
 const { getTheme } = require('../services/ThemeService');
 const { createOrder } = require('../services/OrderService');
+const OrderTrackingService = require('../services/OrderTrackingService');
+const Order = require('../models/Order');
 const { applyTierDiscount } = require('../services/MembershipService');
 const { getEntries, formatEntry } = require('../services/AddressBookService');
 const { validatePromo, applyPromo } = require('../services/PromoService');
@@ -392,6 +394,25 @@ orderScene.action('order_final_confirm', async (ctx) => {
       amount: sess.finalAmount,
       type: sess.productType,
     });
+
+    // ── Send live tracking card (replies to checklist message) ────────────────
+    try {
+      const trackMsg = await OrderTrackingService.sendOrderPlaced(
+        ctx.telegram,
+        ctx.from.id,
+        order,
+        sess,
+        ref.messageId  // chain as reply to the checklist confirmation
+      );
+      if (trackMsg?.message_id) {
+        await Order.findByIdAndUpdate(order._id, {
+          trackingMsgId: trackMsg.message_id,
+          $push: { statusHistory: { status: 'Pending', at: new Date(), note: 'Order placed' } },
+        });
+      }
+    } catch (e) {
+      console.error('[OrderTracking] sendOrderPlaced failed:', e.message);
+    }
 
     await notifyAdmin(ctx, order, sess);
 

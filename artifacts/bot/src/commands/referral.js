@@ -23,6 +23,8 @@ const {
   getStats,
   getLeaderboard,
   adminAdjustCommission,
+  resolveTierInfo,
+  DEFAULT_TIERS,
 } = require('../services/ReferralService');
 const { registerFraudActions } = require('../services/FraudDetector');
 const { auditLog }    = require('../services/logger');
@@ -31,6 +33,39 @@ const Referral        = require('../models/Referral');
 const FraudFlag       = require('../models/FraudFlag');
 const SystemStatus    = require('../models/SystemStatus');
 const User            = require('../models/User');
+
+// ── Tier progress section builder ─────────────────────────────────────────────
+
+function buildTierProgress(stats) {
+  const { tier, nextTier, completedCount, commissionRate } = stats;
+
+  if (!tier) {
+    const first = nextTier || DEFAULT_TIERS[0];
+    if (!first) return '';
+    return (
+      `\`──────────────────────\`\n` +
+      `🏅 *Tier:* No tier yet — refer *${first.minRefs}* friend${first.minRefs > 1 ? 's' : ''} to unlock *${first.emoji} ${first.label}* (${first.rate}%)\n`
+    );
+  }
+
+  let line = `\`──────────────────────\`\n${tier.emoji} *${tier.label} Tier* — Commission: *${commissionRate}%*\n`;
+
+  if (nextTier) {
+    const start    = tier.minRefs - 1;
+    const end      = nextTier.minRefs - 1;
+    const position = Math.min(completedCount - start, end - start);
+    const filled   = Math.max(0, Math.round((position / (end - start)) * 12));
+    const empty    = 12 - filled;
+    const bar      = '█'.repeat(filled) + '░'.repeat(empty);
+    line +=
+      `📊 \`${bar}\` ${completedCount}/${nextTier.minRefs}\n` +
+      `_${nextTier.minRefs - completedCount} more to ${nextTier.emoji} ${nextTier.label} (${nextTier.rate}%)_\n`;
+  } else {
+    line += `🏆 *Max Tier Reached!* You're at the highest commission rate.\n`;
+  }
+
+  return line;
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -100,6 +135,7 @@ module.exports = function registerReferral(bot) {
         `\`──────────────────────\`\n` +
         `🎯 *Commission:* ${stats.commissionRate}% per top-up\n` +
         `📋 *Mode:* ${modeStr}\n` +
+        buildTierProgress(stats) +
         `\`──────────────────────\`\n` +
         `🎁 *Your Friend Gets:* +${stats.welcomeBonus.ks.toLocaleString()} KS + ${stats.welcomeBonus.coins} MC\n` +
         `\`──────────────────────\`\n` +
@@ -217,6 +253,79 @@ module.exports = function registerReferral(bot) {
     } catch (err) {
       await ctx.answerCbQuery('Error: ' + err.message);
     }
+  });
+
+  // ── Admin: /setreftiers ───────────────────────────────────────────────────────
+  // Usage: /setreftiers 1:2 6:3 16:5
+
+  bot.command('setreftiers', adminOnly(), async (ctx) => {
+    const args = ctx.message.text.split(/\s+/).slice(1);
+
+    if (!args.length) {
+      const status = await SystemStatus.get();
+      const tiers  = status.referralTiers?.length ? status.referralTiers : DEFAULT_TIERS;
+      const lines  = tiers.map((t) => `  ${t.emoji} *${t.label}*: ${t.minRefs}+ referrals → *${t.rate}%*`).join('\n');
+      return ctx.reply(
+        `📊 *Referral Commission Tiers*\n\n${lines}\n\n` +
+        `Usage: \`/setreftiers 1:2 6:3 16:5\`\n` +
+        `Format: \`minRefs:rate\` pairs (1–4 tiers)\n\n` +
+        `_Example:_ \`/setreftiers 1:2 5:3 10:4 20:6\``,
+        { parse_mode: 'Markdown' }
+      );
+    }
+
+    const LABELS = [
+      { label: 'Bronze',  emoji: '🥉' },
+      { label: 'Silver',  emoji: '🥈' },
+      { label: 'Gold',    emoji: '🥇' },
+      { label: 'Diamond', emoji: '💎' },
+    ];
+
+    const tiers = [];
+    for (const arg of args.slice(0, 4)) {
+      const [minStr, rateStr] = arg.split(':');
+      const minRefs = Number(minStr);
+      const rate    = Number(rateStr);
+      if (isNaN(minRefs) || isNaN(rate) || minRefs < 1 || rate < 0 || rate > 100) {
+        return ctx.reply(`❌ Invalid tier: \`${arg}\`\n\nFormat: \`minRefs:rate\` (e.g. \`6:3\`)`, { parse_mode: 'Markdown' });
+      }
+      const idx = tiers.length;
+      tiers.push({ minRefs, rate, label: LABELS[idx]?.label || `Tier ${idx + 1}`, emoji: LABELS[idx]?.emoji || '🏅' });
+    }
+
+    // Validate ascending order
+    for (let i = 1; i < tiers.length; i++) {
+      if (tiers[i].minRefs <= tiers[i - 1].minRefs) {
+        return ctx.reply('❌ Tier `minRefs` values must be in ascending order.', { parse_mode: 'Markdown' });
+      }
+    }
+
+    await SystemStatus.set({ referralTiers: tiers }, ctx.from.id);
+    await auditLog(ctx.from.id, 'SET_REFERRAL_TIERS', null, 'System', { tiers });
+
+    const lines = tiers.map((t) => `  ${t.emoji} *${t.label}*: ${t.minRefs}+ refs → *${t.rate}%*`).join('\n');
+    await ctx.reply(
+      `✅ *Referral Tiers Updated!*\n\n${lines}\n\n_Takes effect on the next commission payment._`,
+      { parse_mode: 'Markdown' }
+    );
+  });
+
+  // ── Admin: /reftiers — show current tier table ────────────────────────────────
+
+  bot.command('reftiers', requireRole('MANAGER'), async (ctx) => {
+    const status = await SystemStatus.get();
+    const tiers  = status.referralTiers?.length ? status.referralTiers : DEFAULT_TIERS;
+    const lines  = tiers.map((t, i) => {
+      const next = tiers[i + 1];
+      const range = next ? `${t.minRefs}–${next.minRefs - 1} refs` : `${t.minRefs}+ refs`;
+      return `  ${t.emoji} *${t.label}*: ${range} → *${t.rate}%* commission`;
+    }).join('\n');
+
+    await ctx.reply(
+      `📊 *Referral Commission Tier Table*\n\n${lines}\n\n` +
+      `_Use /setreftiers to configure._`,
+      { parse_mode: 'Markdown' }
+    );
   });
 
   // ── Admin: /refstats ──────────────────────────────────────────────────────────

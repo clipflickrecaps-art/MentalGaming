@@ -141,9 +141,10 @@ artifacts/bot/
 │   │   ├── FAQService.js
 │   │   ├── PriceCalculator.js
 │   │   ├── WebhookProcessor.js
+│   │   ├── OrderTrackingService.js  # Live order status thread (Pending→Processing→Complete)
 │   │   └── aiService.js       # callGemini() wrapper
 │   ├── scenes/                # Telegraf Scenes
-│   │   ├── orderScene.js
+│   │   ├── orderScene.js      # → sends OrderTrackingService.sendOrderPlaced() after createOrder()
 │   │   ├── topupScene.js
 │   │   ├── rateManagerScene.js
 │   │   ├── broadcastScene.js
@@ -155,6 +156,31 @@ artifacts/bot/
 │       └── animations.js      # loadingMessage, pulseLoading, resolveMessage
 └── package.json
 ```
+
+### Referral Tier System
+
+Configurable 3-tier commission model stored in `SystemStatus.referralTiers`.
+
+| Tier | Min Referrals | Commission |
+|---|---|---|
+| 🥉 Bronze | 1–5 | 2% |
+| 🥈 Silver | 6–15 | 3% |
+| 🥇 Gold | 16+ | 5% |
+
+- Rate is resolved dynamically in `ReferralService.processTopupCommission()` via `resolveTierInfo(completedCount, tiers)`
+- `getStats()` returns `tier`, `nextTier`, `completedCount` — used to render progress bar in `/referral`
+- Admin commands: `/setreftiers 1:2 6:3 16:5` (Owner), `/reftiers` (Manager+)
+
+### Live Order Tracking Thread
+
+Every order generates a status thread in the customer's Telegram chat:
+
+1. **Order placed** (`orderScene.js`) → `sendOrderPlaced()` replies to the checklist message; `trackingMsgId` + `statusHistory[Pending]` saved to Order
+2. **Admin taps 🔄 Processing** → `sendProcessing()` replies to tracking card; new `trackingMsgId` stored
+3. **Admin taps ✅ Complete** → `sendDeliveredReceipt()` replies to last tracking msg; includes full timeline + delivery data
+4. **Admin taps ❌ Cancel & Refund** → `sendCancelled()` replies to tracking card with refund + reason
+
+Order model additions: `status` enum now includes `'Processing'`; new fields `trackingMsgId: Number` and `statusHistory: [{status, at, byAdminId, note}]`.
 
 ### SRE Systems (Performance, Automation, Backup)
 
@@ -204,6 +230,8 @@ Daily schedule (Myanmar Time = UTC+6:30):
 | `/setgateway` | Owner | Set payment gateway online/busy/offline |
 | `/setgatewaynote` | Owner | Add note to gateway status |
 | `/dashboard` | Owner | Admin dashboard |
+| `/setreftiers 1:2 6:3 16:5` | Owner | Set referral commission tiers (minRefs:rate pairs) |
+| `/reftiers` | Manager+ | View current referral tier table |
 
 ### Packages
 

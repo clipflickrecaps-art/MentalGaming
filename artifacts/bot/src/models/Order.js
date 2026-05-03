@@ -45,7 +45,7 @@ const orderSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['Pending', 'Success', 'Cancelled', 'Refunded'],
+      enum: ['Pending', 'Processing', 'Success', 'Cancelled', 'Refunded'],
       default: 'Pending',
       index: true,
     },
@@ -67,6 +67,23 @@ const orderSchema = new mongoose.Schema(
     processedBy: { type: Number, default: null },
     refundTransactionId: { type: String, default: null },
     timestamp: { type: Date, default: Date.now },
+
+    // ── Live Order Tracking ───────────────────────────────────────────────────
+    trackingMsgId: {
+      type:    Number,
+      default: null,
+      comment: 'Telegram message ID of the tracking card sent to user — used to chain reply threads',
+    },
+    statusHistory: {
+      type: [{
+        status:    { type: String },
+        at:        { type: Date, default: Date.now },
+        byAdminId: { type: Number, default: null },
+        note:      { type: String, default: null },
+      }],
+      default: [],
+      comment: 'Ordered list of status transitions — rendered as timeline in tracking messages',
+    },
   },
   { timestamps: true, versionKey: false }
 );
