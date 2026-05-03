@@ -89,6 +89,8 @@ artifacts/bot/
 │   │   ├── apiManagement.js   # External API providers + attribution
 │   │   ├── analytics.js       # Financial analytics + AI insights + sentiment
 │   │   ├── sysinfo.js         # /sysinfo, /runbackup, /runcron, /flushcache
+│   │   ├── health.js          # /checkhealth (50-op load test), /checkmodules
+│   │   ├── launch.js          # /launchbroadcast, /setseason, /seasonlist, /previewseason
 │   │   ├── admin.js           # Admin panel
 │   │   ├── help.js            # Help menu
 │   │   └── ambient.js         # LAST: catch-all AI ambient handler
@@ -134,6 +136,7 @@ artifacts/bot/
 │   │   ├── FeedbackService.js # Review collection watcher
 │   │   ├── currencyService.js # Rate fetch/update (cached via CacheService)
 │   │   ├── NavigationService.js
+│   │   ├── StyleService.js    # Seasonal theme engine (standard/thingyan/christmas/lunarnewyear/eid/custom)
 │   │   ├── ThemeService.js
 │   │   ├── FAQService.js
 │   │   ├── PriceCalculator.js
@@ -145,7 +148,8 @@ artifacts/bot/
 │   │   ├── rateManagerScene.js
 │   │   ├── broadcastScene.js
 │   │   ├── spinWheelScene.js
-│   │   └── supportScene.js
+│   │   ├── supportScene.js
+│   │   └── onboardingScene.js # 3-step tour + 100 MC welcome bonus for new users
 │   └── utils/
 │       ├── ui.js              # buildMessage, stat, divider, price
 │       └── animations.js      # loadingMessage, pulseLoading, resolveMessage

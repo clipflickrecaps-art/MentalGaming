@@ -8,11 +8,19 @@
  *   (none)         → direct start    (joinSource='direct')
  *
  * Attribution is written ONCE on first join — never overwritten on re-visits.
+ *
+ * Onboarding:
+ *   First-time users (no deposits, no check-ins) are sent to OnboardingScene
+ *   for a 3-step tour and a 100 MC welcome bonus.
+ *
+ * Seasonal branding:
+ *   Welcome header is decorated by StyleService based on the active seasonal theme.
  */
 
 const { Markup }           = require('telegraf');
 const { mainMenuKeyboard } = require('../utils/keyboard');
 const { registerReferral } = require('../services/ReferralService');
+const StyleService          = require('../services/StyleService');
 const SystemStatus          = require('../models/SystemStatus');
 const User                  = require('../models/User');
 const Product               = require('../models/Product');
@@ -20,7 +28,6 @@ const Product               = require('../models/Product');
 // ── Attribution helper ────────────────────────────────────────────────────────
 
 async function setJoinSourceOnce(telegramId, source, ref) {
-  // Only set if joinSource is still 'unknown' (first join)
   await User.updateOne(
     { telegramId, joinSource: 'unknown' },
     { $set: { joinSource: source, joinRef: ref || null } }
@@ -110,16 +117,35 @@ module.exports = function registerStart(bot) {
       await setJoinSourceOnce(ctx.from.id, 'direct', null);
     }
 
-    const tierBadge = { Silver: '🥈', Gold: '🥇', Platinum: '💎' };
-    const badge = tierBadge[tier] || '🥈';
+    // ── Detect brand-new user for onboarding ─────────────────────────────────
+    // Safe migration: existing active users have totalDeposited>0 or totalCheckIns>0
+    const user = ctx.user;
+    const isFirstTimer = user &&
+      !user.onboardingDone &&
+      (user.totalCheckIns   || 0) === 0 &&
+      (user.totalDeposited  || 0) === 0 &&
+      (user.balanceKS       || 0) === 0;
+
+    if (isFirstTimer) {
+      // Show a quick branded greeting, then enter the onboarding scene
+      const season = await StyleService.getActiveSeason();
+      await ctx.reply(
+        StyleService.buildFirstTimeHeader(name, season) +
+        (referralNotice ? `\n${referralNotice}` : ''),
+        { parse_mode: 'Markdown' }
+      );
+      return ctx.scene.enter('onboarding');
+    }
+
+    // ── Returning user — seasonal welcome ─────────────────────────────────────
+    const season = await StyleService.getActiveSeason();
+    const header = StyleService.buildWelcomeHeader(name, tier, season);
 
     await ctx.reply(
-      `👋 Welcome to *Mental Gaming Store*, ${name}!\n\n` +
-      `🎮 Your go-to store for game credits, top-ups, and gift cards.\n` +
-      `${badge} Membership Tier: *${tier}*\n` +
-      referralNotice +
-      extraNote +
-      `Use the menu below to get started:`,
+      header +
+      (extraNote ? `\n${extraNote}` : '') +
+      (referralNotice ? `\n${referralNotice}` : '') +
+      `\n\nUse the menu below to get started:`,
       {
         parse_mode: 'Markdown',
         ...mainMenuKeyboard(),

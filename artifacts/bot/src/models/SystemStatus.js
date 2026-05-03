@@ -78,6 +78,29 @@ const systemStatusSchema = new mongoose.Schema(
       comment: 'Private channel ID or @username to receive daily encrypted DB backups. Falls back to owner DM.',
     },
 
+    // ── Seasonal Theme Engine ─────────────────────────────────────────────────
+    seasonalTheme: {
+      type:    String,
+      enum:    ['standard', 'thingyan', 'christmas', 'lunarnewyear', 'eid', 'custom'],
+      default: 'standard',
+      comment: 'Active seasonal/event theme for welcome messages and UI decoration',
+    },
+    customSeasonEmoji: {
+      type:    String,
+      default: null,
+      comment: 'Emoji for custom season (e.g. 🌸)',
+    },
+    customSeasonLabel: {
+      type:    String,
+      default: null,
+      comment: 'Display label for custom season (e.g. "Blossom Season")',
+    },
+    customSeasonGreeting: {
+      type:    String,
+      default: null,
+      comment: 'Custom greeting shown in welcome message',
+    },
+
     // ── Webhook Security ───────────────────────────────────────────────────────
     webhookSecret: {
       type:    String,

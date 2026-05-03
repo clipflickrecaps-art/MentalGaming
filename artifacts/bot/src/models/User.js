@@ -47,6 +47,18 @@ const userSchema = new mongoose.Schema(
       comment: 'referral code | channel post ID | product ID | null',
     },
 
+    // ── Onboarding ────────────────────────────────────────────────────────────
+    onboardingDone: {
+      type:    Boolean,
+      default: false,
+      comment: 'True after user completes or skips the first-time tour',
+    },
+    onboardingBonusClaimed: {
+      type:    Boolean,
+      default: false,
+      comment: 'True once the 100 MC welcome bonus has been credited',
+    },
+
     // ── Preferences ──────────────────────────────────────────────────────────
     theme:      { type: String, enum: ['light', 'dark', 'auto'], default: 'auto' },
     joinDate:   { type: Date, default: Date.now },

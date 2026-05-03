@@ -250,9 +250,14 @@ function stopCronJobs() {
 
 // ── Manual triggers (for admin testing) ──────────────────────────────────────
 
+function getJobCount() {
+  return scheduledJobs.length;
+}
+
 module.exports = {
   startCronJobs,
   stopCronJobs,
+  getJobCount,
   // Manual triggers exposed for admin commands
   manualArchive:  archiveOldOrders,
   manualPromo:    purgeExpiredPromos,

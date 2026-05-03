@@ -20,12 +20,13 @@ const { errorHandler, setupGlobalErrorHandlers } = require('./middlewares/errorH
 const { navigationMiddleware }  = require('./middlewares/navigationMiddleware');
 const { maintenanceCheck }      = require('./middlewares/maintenanceCheck');
 
-const rateManagerScene = require('./scenes/rateManagerScene');
-const orderScene       = require('./scenes/orderScene');
-const topupScene       = require('./scenes/topupScene');
-const broadcastScene   = require('./scenes/broadcastScene');
-const spinWheelScene   = require('./scenes/spinWheelScene');
-const supportScene     = require('./scenes/supportScene');
+const rateManagerScene  = require('./scenes/rateManagerScene');
+const orderScene        = require('./scenes/orderScene');
+const topupScene        = require('./scenes/topupScene');
+const broadcastScene    = require('./scenes/broadcastScene');
+const spinWheelScene    = require('./scenes/spinWheelScene');
+const supportScene      = require('./scenes/supportScene');
+const onboardingScene   = require('./scenes/onboardingScene');
 
 validate();
 
@@ -37,6 +38,7 @@ const stage = new Scenes.Stage([
   broadcastScene,
   spinWheelScene,
   supportScene,
+  onboardingScene,
 ]);
 
 bot.use(errorHandler());
@@ -76,6 +78,8 @@ function loadCommands(bot) {
     'apiManagement.js',     // ← External API / provider management + attribution analytics
     'analytics.js',         // ← Financial analytics dashboard + AI insights + sentiment
     'sysinfo.js',           // ← /sysinfo resource monitor + /runbackup + /runcron + /flushcache
+    'health.js',            // ← /checkhealth load test + /checkmodules
+    'launch.js',            // ← /launchbroadcast + /setseason + /seasonlist + /previewseason
     'admin.js',
     'help.js',
     'ambient.js',           // ← LAST: catch-all ambient AI text handler
@@ -172,6 +176,12 @@ async function registerBotCommands() {
     { command: 'runcron',        description: '🔧 Run Maintenance Jobs (Owner)' },
     { command: 'flushcache',     description: '🗃 Flush In-Memory Cache (Manager+)' },
     { command: 'setbackupchan',  description: '🗄 Set Backup Channel (Owner)' },
+    { command: 'checkhealth',    description: '🏥 Full System Health Check (Owner)' },
+    { command: 'checkmodules',   description: '📦 List Loaded Modules (Manager+)' },
+    { command: 'launchbroadcast',description: '🚀 Official Launch Broadcast (Owner)' },
+    { command: 'setseason',      description: '🎨 Set Seasonal Theme (Owner)' },
+    { command: 'seasonlist',     description: '🎨 List Seasonal Themes (Manager+)' },
+    { command: 'previewseason',  description: '👁 Preview a Season Theme (Manager+)' },
     { command: 'setgateway',     description: '💳 Set Payment Gateway Status (Owner)' },
     { command: 'setgatewaynote', description: '📝 Set Gateway Note (Owner)' },
     { command: 'setannouncechannel', description: '📢 Set Announcement Channel (Owner)' },
