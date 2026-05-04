@@ -1,0 +1,62 @@
+uploads = []
+outputs = []
+
+[[generated]]
+id = "PTSybrAl1Ddva4AENB0MM"
+uri = "file://artifacts/landing/public/images/hero-bg.png"
+type = "image"
+title = "Cyberpunk gaming hero background"
+
+[[generated]]
+id = "aLVdE15F0yPIJI_62aC-1"
+uri = "file://artifacts/landing/public/images/card-silver.png"
+type = "image"
+title = "Silver cyber gaming card"
+
+[[generated]]
+id = "GJ6f-CVe0lGJaU2t8dryD"
+uri = "file://artifacts/landing/public/images/card-gold.png"
+type = "image"
+title = "Gold cyber gaming card"
+
+[[generated]]
+id = "Ac9NLi0a__rDSPNdbJm3v"
+uri = "file://artifacts/landing/public/images/card-platinum.png"
+type = "image"
+title = "Platinum cyber gaming card"
+
+[[generated]]
+id = "gonnIW0MjuBpvSNJhutPj"
+uri = "file://artifacts/landing/public/images/game-ml.png"
+type = "image"
+title = "Fantasy MOBA battle arena"
+
+[[generated]]
+id = "5X_f-ATG_DplgsekZfvtH"
+uri = "file://artifacts/landing/public/images/game-ff.png"
+type = "image"
+title = "Battle royale survival game"
+
+[[generated]]
+id = "hN03xvEUwaVtcG99WBs6h"
+uri = "file://artifacts/landing/public/images/game-pubg.png"
+type = "image"
+title = "Tactical military battleground"
+
+[[generated]]
+id = "F4Q04hDm-wQPk1RMhB3Bk"
+uri = "file://artifacts/landing/public/images/game-genshin.png"
+type = "image"
+title = "Anime fantasy open world"
+
+[[generated]]
+id = "gwBHUQIMdvu2M8vmN97BL"
+uri = "file://artifacts/landing/public/images/game-val.png"
+type = "image"
+title = "Tactical hero shooter"
+
+[[generated]]
+id = "5QqVFfuGB5owgTT7OmgR3"
+uri = "file://artifacts/landing/public/images/game-cards.png"
+type = "image"
+title = "Digital gift cards stacked"
