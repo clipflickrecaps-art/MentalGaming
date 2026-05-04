@@ -86,28 +86,41 @@ userSchema.statics.findByTelegramId = function (telegramId) {
 };
 
 userSchema.statics.findOrCreate = async function (telegramId, username, firstName) {
-  try {
-    const setFields = { lastActive: new Date() };
-    if (username)  setFields.username   = username;
-    if (firstName) setFields.first_name = firstName;
+  // Always coerce to Number — Telegram IDs are always numeric
+  const numId = Number(telegramId);
 
-    const user = await this.findOneAndUpdate(
-      { telegramId },
-      { $setOnInsert: { telegramId }, $set: setFields },
-      { upsert: true, new: true, setDefaultsOnInsert: true }
-    );
+  // Step 1 — find by number OR string (handles legacy docs stored as string)
+  let user = await this.findOne({ $or: [{ telegramId: numId }, { telegramId: String(telegramId) }] });
 
-    // Mongoose 8.x can return null on upsert in some edge cases — fallback to direct find
-    if (!user) {
-      console.warn('[User] findOneAndUpdate returned null, falling back to findOne for:', telegramId);
-      return this.findOne({ telegramId });
+  if (user) {
+    // Normalise type in background if stored as string
+    if (typeof user.telegramId !== 'number') {
+      this.updateOne({ _id: user._id }, { $set: { telegramId: numId, lastActive: new Date() } }).catch(() => {});
+    } else {
+      const patch = { lastActive: new Date() };
+      if (username)  patch.username   = username;
+      if (firstName) patch.first_name = firstName;
+      this.updateOne({ _id: user._id }, { $set: patch }).catch(() => {});
     }
     return user;
-  } catch (err) {
-    if (err.code === 11000) return this.findOne({ telegramId });
-    console.error('[User] findOrCreate error for', telegramId, ':', err.message);
-    // Last-resort fallback — never let auth crash the bot
-    return this.findOne({ telegramId }) || null;
+  }
+
+  // Step 2 — not found; create
+  try {
+    user = await this.create({
+      telegramId: numId,
+      username:   username   || null,
+      first_name: firstName  || null,
+      lastActive: new Date(),
+    });
+    return user;
+  } catch (createErr) {
+    console.error('[User] create error for', numId, ':', createErr.code, createErr.message);
+    // Duplicate key — race condition; try both forms again
+    if (createErr.code === 11000) {
+      return this.findOne({ $or: [{ telegramId: numId }, { telegramId: String(telegramId) }] });
+    }
+    return null;
   }
 };
 

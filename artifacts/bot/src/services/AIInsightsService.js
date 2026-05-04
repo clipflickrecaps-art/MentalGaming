@@ -26,16 +26,23 @@ function geminiUrl(endpoint) {
 }
 
 async function callGemini(systemPrompt, userPrompt, { maxTokens = 600, temperature = 0.7 } = {}) {
-  const { data } = await axios.post(
-    geminiUrl('generateContent'),
-    {
-      system_instruction: { parts: [{ text: systemPrompt }] },
-      contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
-      generationConfig: { maxOutputTokens: maxTokens, temperature },
-    },
-    { headers: { 'Content-Type': 'application/json' }, timeout: 30000 }
-  );
-  return data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || null;
+  try {
+    const { data } = await axios.post(
+      geminiUrl('generateContent'),
+      {
+        system_instruction: { parts: [{ text: systemPrompt }] },
+        contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+        generationConfig: { maxOutputTokens: maxTokens, temperature },
+      },
+      { headers: { 'Content-Type': 'application/json' }, timeout: 30000 }
+    );
+    return data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || null;
+  } catch (err) {
+    if (err.response?.status === 429) {
+      throw new Error('AI rate limit reached — please wait a few minutes before trying again.');
+    }
+    throw err;
+  }
 }
 
 // ── Data formatters ───────────────────────────────────────────────────────────

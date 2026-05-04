@@ -123,8 +123,22 @@ module.exports = function registerDashboard(bot) {
   });
 
   bot.hears('📊 Dashboard', adminOnly(), async (ctx) => {
-    await ctx.scene ? ctx.reply('Loading...') : null;
-    return ctx.reply('/dashboard');
+    const ref = await pulseLoading(ctx, 'Loading Dashboard', 3, 400);
+    try {
+      const theme = getTheme(ctx.user);
+      const text = await buildDashboardText(theme);
+      await resolveMessage(ctx, ref, text, {
+        ...Markup.inlineKeyboard([
+          [Markup.button.callback('🔄 Refresh', 'dashboard_refresh')],
+          [Markup.button.callback('📦 View Pending', 'admin_pending_orders')],
+          [Markup.button.callback('📊 Analytics', 'dashboard_analytics')],
+          [Markup.button.callback('💱 Manage Rates', 'open_rate_manager')],
+          [Markup.button.callback('🖥 System Health', 'dashboard_syshealth')],
+        ]),
+      });
+    } catch (err) {
+      await resolveMessage(ctx, ref, `❌ Dashboard error: ${err.message}`);
+    }
   });
 
   bot.action('dashboard_refresh', adminOnly(), async (ctx) => {
