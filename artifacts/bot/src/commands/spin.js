@@ -15,6 +15,12 @@ module.exports = function registerSpin(bot) {
     await ctx.scene.enter('spin_wheel_scene');
   });
 
+  // Inline button handler for main menu spin button
+  bot.action('spin_wheel_start', checkRestrictions('spin'), async (ctx) => {
+    await ctx.answerCbQuery();
+    await ctx.scene.enter('spin_wheel_scene');
+  });
+
   bot.command('spininfo', async (ctx) => {
     const user = await User.findByTelegramId(ctx.from.id);
     if (!user) return ctx.reply('❌ User not found.');

@@ -16,6 +16,32 @@ const Transaction = require('../models/Transaction');
 
 const COIN_BONUS_RATE = { Silver: 0.01, Gold: 0.015, Platinum: 0.02 };
 
+// ── Dynamic coin bonus rates (from GameConfig with 60s in-memory cache) ──────
+let _ratesCache = null;
+let _ratesCacheExpiry = 0;
+
+async function getCoinBonusRates() {
+  if (Date.now() < _ratesCacheExpiry && _ratesCache) return _ratesCache;
+  try {
+    const GameConfig = require('../models/GameConfig');
+    const cfg = await GameConfig.get();
+    _ratesCache = {
+      Silver:   cfg.coinBonusRateSilver,
+      Gold:     cfg.coinBonusRateGold,
+      Platinum: cfg.coinBonusRatePlatinum,
+    };
+    _ratesCacheExpiry = Date.now() + 60_000; // 60s cache
+    return _ratesCache;
+  } catch {
+    return COIN_BONUS_RATE; // fallback to hardcoded defaults
+  }
+}
+
+function _invalidateRateCache() {
+  _ratesCache = null;
+  _ratesCacheExpiry = 0;
+}
+
 // ── Unique txId generator ────────────────────────────────────────────────────
 function generateTxId() {
   const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
@@ -186,9 +212,11 @@ async function debitCoin(userId, amount, { type = 'Debit', note = '' } = {}) {
 
 /**
  * Calculate coin bonus for a given KS amount and membership tier.
+ * Reads dynamic rates from GameConfig (with 60s cache).
  */
-function calcCoinBonus(amountKS, tier = 'Silver') {
-  const rate = COIN_BONUS_RATE[tier] || COIN_BONUS_RATE.Silver;
+async function calcCoinBonus(amountKS, tier = 'Silver') {
+  const rates = await getCoinBonusRates();
+  const rate = rates[tier] || rates.Silver;
   return Math.floor(amountKS * rate);
 }
 
@@ -234,7 +262,7 @@ async function approveTopup(txId, adminId) {
 
   const user = tx.userId;
   const amountKS = tx.amount;
-  const bonusCoins = calcCoinBonus(amountKS, user.membershipTier);
+  const bonusCoins = await calcCoinBonus(amountKS, user.membershipTier);
 
   // Mark original pending tx as Completed
   tx.status = 'Completed';
@@ -255,9 +283,10 @@ async function approveTopup(txId, adminId) {
 
   // Award coin bonus
   if (bonusCoins > 0) {
+    const rates = await getCoinBonusRates();
     await creditCoin(user._id, bonusCoins, {
       type: 'Bonus',
-      note: `Top-up bonus — ${user.membershipTier} tier (${Math.round(COIN_BONUS_RATE[user.membershipTier] * 100)}%)`,
+      note: `Top-up bonus — ${user.membershipTier} tier (${Math.round((rates[user.membershipTier] || 0.01) * 100 * 10) / 10}%)`,
     });
   }
 
@@ -306,6 +335,8 @@ module.exports = {
   creditCoin,
   debitCoin,
   calcCoinBonus,
+  getCoinBonusRates,
+  _invalidateRateCache,
   createPendingTopup,
   approveTopup,
   rejectTopup,

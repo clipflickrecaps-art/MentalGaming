@@ -128,4 +128,29 @@ function buildThemeKeyboard(currentTheme) {
   );
 }
 
-module.exports = { getTheme, getThemeByName, setUserTheme, buildThemeKeyboard, resolveAutoTheme, THEMES };
+/**
+ * Combined settings keyboard: theme row + language row + back button.
+ */
+function buildSettingsKeyboard(currentTheme, currentLang = 'en') {
+  const { Markup } = require('telegraf');
+  const themeOptions = [
+    { key: 'light', label: '☀️ Light' },
+    { key: 'dark',  label: '🌙 Dark'  },
+    { key: 'auto',  label: '🔄 Auto (MMT)' },
+  ];
+  const langOptions = [
+    { key: 'en', label: '🇬🇧 English' },
+    { key: 'mm', label: '🇲🇲 Myanmar' },
+  ];
+  return Markup.inlineKeyboard([
+    themeOptions.map((o) =>
+      Markup.button.callback(o.key === currentTheme ? `${o.label} ✓` : o.label, `theme_set:${o.key}`)
+    ),
+    langOptions.map((o) =>
+      Markup.button.callback(o.key === currentLang ? `${o.label} ✓` : o.label, `lang_set:${o.key}`)
+    ),
+    [Markup.button.callback('🔙 Main Menu', 'nav:back')],
+  ]);
+}
+
+module.exports = { getTheme, getThemeByName, setUserTheme, buildThemeKeyboard, buildSettingsKeyboard, resolveAutoTheme, THEMES };

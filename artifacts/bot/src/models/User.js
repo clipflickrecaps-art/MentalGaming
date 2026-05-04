@@ -60,7 +60,8 @@ const userSchema = new mongoose.Schema(
     },
 
     // ── Preferences ──────────────────────────────────────────────────────────
-    theme:      { type: String, enum: ['light', 'dark', 'auto'], default: 'auto' },
+    theme:    { type: String, enum: ['light', 'dark', 'auto'], default: 'auto' },
+    language: { type: String, enum: ['en', 'mm'], default: 'en' },
     joinDate:   { type: Date, default: Date.now },
     lastActive: { type: Date, default: Date.now },
   },

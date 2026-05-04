@@ -17,14 +17,14 @@
  *   Welcome header is decorated by StyleService based on the active seasonal theme.
  */
 
-const { Markup }                              = require('telegraf');
-const { mainMenuKeyboard, adminMenuKeyboard } = require('../utils/keyboard');
-const { registerReferral }                    = require('../services/ReferralService');
-const StyleService                             = require('../services/StyleService');
-const SystemStatus                             = require('../models/SystemStatus');
-const User                                     = require('../models/User');
-const Product                                  = require('../models/Product');
-const { config }                               = require('../../config/settings');
+const { Markup }             = require('telegraf');
+const { registerReferral }   = require('../services/ReferralService');
+const StyleService            = require('../services/StyleService');
+const SystemStatus            = require('../models/SystemStatus');
+const User                    = require('../models/User');
+const Product                 = require('../models/Product');
+const Nav                     = require('../services/NavigationService');
+const { config }              = require('../../config/settings');
 
 // ── Attribution helper ────────────────────────────────────────────────────────
 
@@ -119,7 +119,6 @@ module.exports = function registerStart(bot) {
     }
 
     // ── Detect brand-new user for onboarding ─────────────────────────────────
-    // Safe migration: existing active users have totalDeposited>0 or totalCheckIns>0
     const user = ctx.user;
     const isFirstTimer = user &&
       !user.onboardingDone &&
@@ -128,7 +127,6 @@ module.exports = function registerStart(bot) {
       (user.balanceKS       || 0) === 0;
 
     if (isFirstTimer) {
-      // Show a quick branded greeting, then enter the onboarding scene
       const season = await StyleService.getActiveSeason();
       await ctx.reply(
         StyleService.buildFirstTimeHeader(name, season) +
@@ -138,34 +136,32 @@ module.exports = function registerStart(bot) {
       return ctx.scene.enter('onboarding');
     }
 
-    // ── Admin shortcut — bypass user menu entirely ────────────────────────────
+    // ── Admin — navigate to inline admin panel ────────────────────────────────
     const isAdmin = Number(ctx.from.id) === Number(config.bot.adminId);
     if (isAdmin) {
-      await ctx.reply(
-        `🔧 *Admin Panel* — Mental Gaming Store\n\n` +
-        `👋 Welcome back, *${name}*!\n` +
-        `_You are logged in as the bot owner._`,
-        {
-          parse_mode: 'Markdown',
-          ...adminMenuKeyboard(),
-        }
+      // Remove any existing reply keyboard silently, then show admin nav
+      const rm = await ctx.reply(
+        `🔧 *Admin Panel* — Mental Gaming Store\n👋 Welcome back, *${name}*!`,
+        { parse_mode: 'Markdown', ...Markup.removeKeyboard() }
       );
-      return;
+      // Delete the cleanup message so it's seamless
+      await ctx.telegram.deleteMessage(ctx.chat.id, rm.message_id).catch(() => {});
+      return Nav.navigate(ctx, 'admin_main', false);
     }
 
-    // ── Returning user — seasonal welcome ─────────────────────────────────────
+    // ── Returning user — seasonal welcome + inline main menu ─────────────────
     const season = await StyleService.getActiveSeason();
     const header = StyleService.buildWelcomeHeader(name, tier, season);
 
+    // Send welcome text — including Markup.removeKeyboard() removes any old reply keyboard
     await ctx.reply(
       header +
       (extraNote ? `\n${extraNote}` : '') +
-      (referralNotice ? `\n${referralNotice}` : '') +
-      `\n\nUse the menu below to get started:`,
-      {
-        parse_mode: 'Markdown',
-        ...mainMenuKeyboard(),
-      }
+      (referralNotice ? `\n${referralNotice}` : ''),
+      { parse_mode: 'Markdown', ...Markup.removeKeyboard() }
     );
+
+    // Show the inline main menu
+    await Nav.navigate(ctx, 'main', false);
   });
 };

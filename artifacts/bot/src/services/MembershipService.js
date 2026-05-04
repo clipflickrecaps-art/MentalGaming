@@ -24,6 +24,27 @@ const TIER_CONFIG = {
 
 const TIER_ORDER = ['Silver', 'Gold', 'Platinum'];
 
+// ── Dynamic tier config (from GameConfig with 60s cache) ──────────────────────
+let _tierCache = null;
+let _tierCacheExpiry = 0;
+
+async function getTierConfig() {
+  if (Date.now() < _tierCacheExpiry && _tierCache) return _tierCache;
+  try {
+    const GameConfig = require('../models/GameConfig');
+    const cfg = await GameConfig.get();
+    _tierCache = {
+      Silver:   { min: 0,                  discount: cfg.tierSilverDiscount,   badge: '🥈', color: '⬜', next: 'Gold',     bonusRate: cfg.coinBonusRateSilver   },
+      Gold:     { min: cfg.tierGoldMin,     discount: cfg.tierGoldDiscount,     badge: '🥇', color: '🟨', next: 'Platinum', bonusRate: cfg.coinBonusRateGold     },
+      Platinum: { min: cfg.tierPlatinumMin, discount: cfg.tierPlatinumDiscount, badge: '💎', color: '🟦', next: null,       bonusRate: cfg.coinBonusRatePlatinum },
+    };
+    _tierCacheExpiry = Date.now() + 60_000;
+    return _tierCache;
+  } catch {
+    return TIER_CONFIG;
+  }
+}
+
 // ── Apply tier-based discount to a price ─────────────────────────────────────
 function applyTierDiscount(basePrice, tier) {
   const pct = TIER_CONFIG[tier]?.discount || 0;
@@ -143,6 +164,7 @@ function calcTierFromDeposited(totalDeposited) {
 
 module.exports = {
   TIER_CONFIG,
+  getTierConfig,
   applyTierDiscount,
   formatProgressBar,
   getTierProgress,

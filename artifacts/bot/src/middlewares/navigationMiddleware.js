@@ -9,10 +9,12 @@
  *   nav:go:<id>     → navigate to folder <id>
  *   nav:home        → clear history and go to main
  *   theme_set:<key> → set user theme preference
+ *   lang_set:<key>  → set user language preference
  */
 
 const Nav = require('../services/NavigationService');
-const { setUserTheme, buildThemeKeyboard, getTheme } = require('../services/ThemeService');
+const { setUserTheme, buildSettingsKeyboard, getTheme } = require('../services/ThemeService');
+const User = require('../models/User');
 
 function navigationMiddleware(bot) {
   bot.action('nav:back', async (ctx) => {
@@ -32,20 +34,46 @@ function navigationMiddleware(bot) {
     await Nav.navigate(ctx, folderId, true);
   });
 
+  // ── Theme setter ───────────────────────────────────────────────────────────
   bot.action(/^theme_set:(.+)$/, async (ctx) => {
     const themeName = ctx.match[1];
-    await ctx.answerCbQuery(`Theme set to ${themeName}`);
+    await ctx.answerCbQuery(`Theme: ${themeName}`);
 
     try {
       await setUserTheme(ctx.from.id, themeName);
       if (ctx.user) ctx.user.theme = themeName;
 
       const theme = getTheme(ctx.user);
+      const currentLang = ctx.user?.language || 'en';
       await ctx.editMessageText(
-        `${theme.format.header('Theme Updated')}\n${theme.emoji.settings} Your theme is now set to ${theme.format.bold(themeName === 'auto' ? 'Auto (Myanmar Time)' : themeName)}.\n\n_Changes apply immediately to all menus._`,
+        `${theme.format.header('Settings Updated')}\n${theme.emoji.settings} Theme: ${theme.format.bold(themeName === 'auto' ? 'Auto (Myanmar Time)' : themeName)}\n🌐 Language: ${currentLang === 'mm' ? '🇲🇲 Myanmar' : '🇬🇧 English'}\n\n_Changes apply immediately._`,
         {
           parse_mode: 'Markdown',
-          ...buildThemeKeyboard(themeName),
+          ...buildSettingsKeyboard(themeName, currentLang),
+        }
+      );
+    } catch (err) {
+      await ctx.reply(`❌ ${err.message}`);
+    }
+  });
+
+  // ── Language setter ────────────────────────────────────────────────────────
+  bot.action(/^lang_set:(.+)$/, async (ctx) => {
+    const lang = ctx.match[1];
+    const langLabel = lang === 'mm' ? '🇲🇲 Myanmar' : '🇬🇧 English';
+    await ctx.answerCbQuery(`Language: ${langLabel}`);
+
+    try {
+      await User.findOneAndUpdate({ telegramId: ctx.from.id }, { language: lang });
+      if (ctx.user) ctx.user.language = lang;
+
+      const theme = getTheme(ctx.user);
+      const currentTheme = ctx.user?.theme || 'auto';
+      await ctx.editMessageText(
+        `${theme.format.header('Settings Updated')}\n${theme.emoji.settings} Theme: ${theme.format.bold(currentTheme === 'auto' ? 'Auto (Myanmar Time)' : currentTheme)}\n🌐 Language: ${langLabel}\n\n_Changes apply immediately._`,
+        {
+          parse_mode: 'Markdown',
+          ...buildSettingsKeyboard(currentTheme, lang),
         }
       );
     } catch (err) {

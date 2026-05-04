@@ -5,7 +5,13 @@ function attachUser() {
     if (!ctx.from) return next();
 
     try {
-      const user = await User.findOrCreate(ctx.from.id, ctx.from.username, ctx.from.first_name);
+      let user = await User.findOrCreate(ctx.from.id, ctx.from.username, ctx.from.first_name);
+
+      if (!user) {
+        // Retry once after a short delay — can happen during race conditions or brief DB hiccups
+        await new Promise((r) => setTimeout(r, 250));
+        user = await User.findOrCreate(ctx.from.id, ctx.from.username, ctx.from.first_name);
+      }
 
       if (!user) {
         console.error('[AuthUser] findOrCreate returned null for:', ctx.from.id);

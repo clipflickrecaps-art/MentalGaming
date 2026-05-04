@@ -36,9 +36,10 @@ Nav.register({
     ]);
 
     const keyboard = Markup.inlineKeyboard([
-      [Nav.itemButton('Shop', 'nav:go:shop', '🛒'), Nav.itemButton('My Orders', 'my_orders', '📦')],
-      [Nav.itemButton('Wallet', 'wallet_view', '💰'), Nav.itemButton('My Profile', 'profile_view', '👤')],
-      [Nav.itemButton('Support', 'support_view', '💬'), Nav.itemButton('Settings', 'settings_view', '⚙️')],
+      [Nav.itemButton('Shop',       'nav:go:shop',            '🛒'), Nav.itemButton('My Orders',  'my_orders',               '📦')],
+      [Nav.itemButton('Wallet',     'nav:go:wallet_view',     '💰'), Nav.itemButton('My Profile', 'nav:go:profile_view',      '👤')],
+      [Nav.itemButton('Spin Wheel', 'spin_wheel_start',       '🎰'), Nav.itemButton('Support',    'nav:go:support_view',      '💬')],
+      [Nav.itemButton('Settings',   'nav:go:settings_view',   '⚙️')],
     ]);
 
     return { text, keyboard };
@@ -70,12 +71,15 @@ Nav.register({
   },
 });
 
-function buildGameFolder(id, title, subfolders) {
+function buildGameFolder(id, title, subfolders, description = '') {
   Nav.register({
     id,
     title,
     build: async (ctx, theme) => {
-      const text = buildMessage(theme, [{ title, lines: [`${theme.emoji.bullet} Select a package:`] }]);
+      const lines = description
+        ? [description, '', `${theme.emoji.bullet} Select a package:`]
+        : [`${theme.emoji.bullet} Select a package:`];
+      const text = buildMessage(theme, [{ title, lines }]);
       const rows = Nav.buildRows(subfolders.map((f) => Nav.folderButton(f.label, f.id)), 2);
       return { text, keyboard: Markup.inlineKeyboard([...rows, backRow()]) };
     },
@@ -83,32 +87,37 @@ function buildGameFolder(id, title, subfolders) {
 }
 
 buildGameFolder('ml', '📱 Mobile Legends', [
-  { id: 'ml_diamonds', label: 'Diamonds' },
-  { id: 'ml_weekly',   label: 'Weekly Pass' },
-  { id: 'ml_starlight', label: 'Starlight' },
-]);
+  { id: 'ml_diamonds',  label: 'Diamonds'    },
+  { id: 'ml_weekly',    label: 'Weekly Pass' },
+  { id: 'ml_starlight', label: 'Starlight'   },
+], '🎮 Top up ML Diamonds, Weekly Pass & Starlight directly to your in-game account. Fastest delivery in Myanmar!');
+
 buildGameFolder('ff', '🔥 Free Fire', [
-  { id: 'ff_diamonds',    label: 'Diamonds' },
-  { id: 'ff_membership',  label: 'Membership' },
-]);
+  { id: 'ff_diamonds',   label: 'Diamonds'   },
+  { id: 'ff_membership', label: 'Membership' },
+], '💥 Boost your Free Fire gameplay with Diamonds and Elite/Gold Memberships. Instant top-up, best rates!');
+
 buildGameFolder('pubg', '🎯 PUBG Mobile', [
-  { id: 'pubg_uc',        label: 'UC' },
-  { id: 'pubg_royalpass', label: 'Royal Pass' },
-]);
+  { id: 'pubg_uc',        label: 'UC'          },
+  { id: 'pubg_royalpass', label: 'Royal Pass'  },
+], '🎯 Top up PUBG UC and Royal Pass Season upgrades at unbeatable prices. Delivered to your game ID instantly!');
+
 buildGameFolder('genshin', '✨ Genshin Impact', [
   { id: 'genshin_genesis', label: 'Genesis Crystals' },
-  { id: 'genshin_bp',      label: 'Battle Pass' },
-]);
+  { id: 'genshin_bp',      label: 'Battle Pass'      },
+], '✨ Power up your Genshin Impact journey with Genesis Crystals and Welkin Moon Battle Pass. Worldwide server support!');
+
 buildGameFolder('valorant', '🔫 Valorant', [
-  { id: 'valorant_vp',      label: 'VP Points' },
+  { id: 'valorant_vp',      label: 'VP Points'      },
   { id: 'valorant_premium', label: 'Premium Bundle' },
-]);
+], '🔫 Grab Valorant Points and Premium Battle Pass upgrades for all regions. Competitive prices, instant delivery!');
+
 buildGameFolder('giftcard', '🎁 Gift Cards', [
   { id: 'gc_google', label: 'Google Play' },
-  { id: 'gc_apple',  label: 'App Store' },
-  { id: 'gc_steam',  label: 'Steam' },
-  { id: 'gc_razer',  label: 'Razer Gold' },
-]);
+  { id: 'gc_apple',  label: 'App Store'   },
+  { id: 'gc_steam',  label: 'Steam'       },
+  { id: 'gc_razer',  label: 'Razer Gold'  },
+], '🎁 Digital gift cards for all major platforms. Available in multiple denominations, no account required!');
 
 function buildProductFolder(id, title, category, parent) {
   Nav.register({

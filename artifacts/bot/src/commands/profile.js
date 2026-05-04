@@ -1,14 +1,11 @@
 /**
  * Profile Command — Membership dashboard with tier progress, discount, streak
- *
- * /profile      — full profile view via NavigationService
- * /progress     — focused tier progress bar + level-up info
  */
 
 const Nav = require('../services/NavigationService');
 const { buildMessage, price, formatDate } = require('../utils/ui');
-const { COIN_BONUS_RATE } = require('../services/WalletService');
-const { getTierProgress, TIER_CONFIG, formatProgressBar } = require('../services/MembershipService');
+const { getCoinBonusRates } = require('../services/WalletService');
+const { getTierProgress, getTierConfig, formatProgressBar } = require('../services/MembershipService');
 const { Markup } = require('telegraf');
 const User = require('../models/User');
 
@@ -17,27 +14,32 @@ function tierBadge(tier) {
   return map[tier] || tier;
 }
 
-function discountLine(tier) {
-  const pct = TIER_CONFIG[tier]?.discount || 0;
-  return pct > 0 ? `🏷 Tier Discount: *${pct}% off* all products` : '🏷 Tier Discount: None (Silver)';
-}
-
 Nav.register({
   id: 'profile_view',
   title: '👤 My Profile',
   build: async (ctx, theme) => {
-    const user = ctx.user;
-    if (!user) return { text: '❌ Could not load profile.', keyboard: Markup.inlineKeyboard([Nav.backButton()]) };
+    // Fallback to direct DB lookup if middleware didn't attach user
+    const user = ctx.user || (ctx.from?.id ? await User.findByTelegramId(ctx.from.id) : null);
+    if (!user) {
+      return {
+        text: '❌ Could not load profile. Please tap the button below to try again.',
+        keyboard: Markup.inlineKeyboard([
+          [Markup.button.callback('🔄 Retry', 'nav:go:profile_view')],
+          Nav.backButton('🔙 Main Menu'),
+        ]),
+      };
+    }
 
     const balanceKS   = user.balanceKS   || 0;
     const balanceCoin = user.balanceCoin  || 0;
     const deposited   = user.totalDeposited || 0;
     const tier        = user.membershipTier || 'Silver';
-    const bonusPct    = Math.round((COIN_BONUS_RATE[tier] || 0.01) * 100 * 10) / 10;
-    const cfg         = TIER_CONFIG[tier];
+    const tierCfg     = await getTierConfig();
+    const bonusRates  = await getCoinBonusRates();
+    const bonusPct    = Math.round((bonusRates[tier] || 0.01) * 100 * 10) / 10;
+    const cfg         = tierCfg[tier];
     const streak      = user.checkInStreak || 0;
 
-    // Progress bar
     const progress = await getTierProgress(user.telegramId);
     let progressLines = [];
     if (progress && progress.nextTier) {
@@ -45,7 +47,7 @@ Nav.register({
       progressLines = [
         ``,
         `📈 *Tier Progress:*`,
-        `${cfg.badge} → ${TIER_CONFIG[progress.nextTier].badge}`,
+        `${cfg.badge} → ${tierCfg[progress.nextTier].badge}`,
         `\`${bar}\``,
         `_${progress.message}_`,
       ];
@@ -61,6 +63,11 @@ Nav.register({
       ? `⏳ Lifted: ${formatDate(user.restrictedUntil)}`
       : null;
 
+    const discountPct = cfg?.discount || 0;
+    const discountLine = discountPct > 0
+      ? `🏷 Tier Discount: *${discountPct}% off* all products`
+      : '🏷 Tier Discount: None (Silver)';
+
     const lines = [
       `${theme.emoji.user} ${user.username ? `@${user.username}` : 'No username'}`,
       `🆔 ID: ${theme.format.code(String(user.telegramId))}`,
@@ -70,7 +77,7 @@ Nav.register({
       `${theme.emoji.coin} Mental Coins: ${theme.format.bold(balanceCoin.toLocaleString() + ' MC')}`,
       `💼 Total Deposited: ${price(deposited)}`,
       `🎁 Coin Bonus Rate: +${bonusPct}%`,
-      discountLine(tier),
+      discountLine,
       ``,
       `🔥 Check-In Streak: *${streak} day${streak !== 1 ? 's' : ''}*`,
       `📅 Total Check-Ins: *${user.totalCheckIns || 0}*`,
@@ -95,7 +102,7 @@ Nav.register({
   },
 });
 
-// ── Progress view (inline action) ────────────────────────────────────────────
+// ── Progress view ─────────────────────────────────────────────────────────────
 async function sendProgressView(ctx) {
   const user = await User.findByTelegramId(ctx.from.id);
   if (!user) return ctx.reply('❌ Please /start first.');
@@ -103,8 +110,9 @@ async function sendProgressView(ctx) {
   const progress = await getTierProgress(user.telegramId);
   if (!progress) return ctx.reply('❌ Could not load progress.');
 
+  const tierCfg = await getTierConfig();
   const tier    = user.membershipTier;
-  const cfg     = TIER_CONFIG[tier];
+  const cfg     = tierCfg[tier];
 
   let text;
   if (!progress.nextTier) {
@@ -112,11 +120,11 @@ async function sendProgressView(ctx) {
       `💎 *Platinum Member — MAX TIER*\n\n` +
       `You've reached the highest tier!\n\n` +
       `${cfg.badge} Active Benefits:\n` +
-      `  🏷 *5% discount* on all products\n` +
-      `  🪙 *2% Mental Coin bonus* on top-ups\n` +
+      `  🏷 *${cfg.discount}% discount* on all products\n` +
+      `  🪙 *${Math.round((cfg.bonusRate || 0.02) * 100)}% Mental Coin bonus* on top-ups\n` +
       `  💎 Platinum badge`;
   } else {
-    const nextCfg = TIER_CONFIG[progress.nextTier];
+    const nextCfg = tierCfg[progress.nextTier];
     const bar = `[${formatProgressBar(progress.progressPct / 100)}] ${progress.progressPct}%`;
     text =
       `📊 *Tier Progress*\n\n` +
@@ -124,12 +132,11 @@ async function sendProgressView(ctx) {
       `Next Tier:    ${nextCfg.badge} *${progress.nextTier}*\n\n` +
       `\`${bar}\`\n\n` +
       `💼 Deposited: *${user.totalDeposited.toLocaleString()} KS*\n` +
-      `🎯 Target: *${TIER_CONFIG[progress.nextTier].min.toLocaleString()} KS*\n\n` +
+      `🎯 Target: *${nextCfg.min.toLocaleString()} KS*\n\n` +
       `💡 ${progress.message}\n\n` +
       `*${progress.nextTier} Benefits:*\n` +
-      (progress.nextTier === 'Gold'
-        ? `  🏷 *2% discount* on all products\n  🪙 *1.5% coin bonus* on top-ups`
-        : `  🏷 *5% discount* on all products\n  🪙 *2% coin bonus* on top-ups`);
+      `  🏷 *${nextCfg.discount}% discount* on all products\n` +
+      `  🪙 *${Math.round((nextCfg.bonusRate || 0.015) * 100 * 10) / 10}% coin bonus* on top-ups`;
   }
 
   await ctx.reply(text, {

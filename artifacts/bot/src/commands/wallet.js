@@ -1,26 +1,39 @@
 const { Markup } = require('telegraf');
 const Nav = require('../services/NavigationService');
-const { getTheme } = require('../services/ThemeService');
 const { buildMessage, price, formatDate } = require('../utils/ui');
-const { getHistory, COIN_BONUS_RATE } = require('../services/WalletService');
+const { getHistory, getCoinBonusRates } = require('../services/WalletService');
+const { getTierConfig } = require('../services/MembershipService');
 const User = require('../models/User');
 
 Nav.register({
   id: 'wallet_view',
   title: '💰 Wallet',
   build: async (ctx, theme) => {
-    const user = ctx.user;
-    const balanceKS   = user?.balanceKS   || 0;
-    const balanceCoin = user?.balanceCoin  || 0;
-    const tier        = user?.membershipTier || 'Silver';
-    const deposited   = user?.totalDeposited || 0;
-    const bonusPct    = Math.round((COIN_BONUS_RATE[tier] || 0.01) * 100 * 10) / 10;
+    // Fallback to direct DB lookup if middleware didn't attach user
+    const user = ctx.user || (ctx.from?.id ? await User.findByTelegramId(ctx.from.id) : null);
+    if (!user) {
+      return {
+        text: '❌ Could not load wallet. Please tap retry below.',
+        keyboard: Markup.inlineKeyboard([
+          [Markup.button.callback('🔄 Retry', 'nav:go:wallet_view')],
+          Nav.backButton('🔙 Main Menu'),
+        ]),
+      };
+    }
 
-    const tierThresholds = { Silver: 50000, Gold: 200000, Platinum: null };
-    const nextTier = { Silver: 'Gold', Gold: 'Platinum', Platinum: null }[tier];
-    const nextThreshold = tierThresholds[tier];
-    const progressLine = nextTier
-      ? `📊 To ${nextTier}: ${price(Math.max(0, nextThreshold - deposited))} more`
+    const balanceKS   = user.balanceKS   || 0;
+    const balanceCoin = user.balanceCoin  || 0;
+    const tier        = user.membershipTier || 'Silver';
+    const deposited   = user.totalDeposited || 0;
+    const bonusRates  = await getCoinBonusRates();
+    const bonusPct    = Math.round((bonusRates[tier] || 0.01) * 100 * 10) / 10;
+    const tierCfg     = await getTierConfig();
+
+    const nextTierMap  = { Silver: 'Gold', Gold: 'Platinum', Platinum: null };
+    const nextTier     = nextTierMap[tier];
+    const nextMin      = nextTier ? tierCfg[nextTier]?.min : null;
+    const progressLine = nextTier && nextMin
+      ? `📊 To ${nextTier}: ${price(Math.max(0, nextMin - deposited))} more`
       : `🏆 Maximum tier reached!`;
 
     const text = buildMessage(theme, [
@@ -41,9 +54,9 @@ Nav.register({
     return {
       text,
       keyboard: Markup.inlineKeyboard([
-        [Markup.button.callback('💳 Top Up Wallet',        'start_topup')],
-        [Markup.button.callback('📜 Transaction History',  'wallet_history')],
-        [Markup.button.callback('🎁 Coin History',         'coin_history')],
+        [Markup.button.callback('💳 Top Up Wallet',       'start_topup')],
+        [Markup.button.callback('📜 Transaction History', 'wallet_history')],
+        [Markup.button.callback('🎁 Coin History',        'coin_history')],
         Nav.backButton('🔙 Main Menu'),
       ]),
     };
@@ -67,7 +80,7 @@ module.exports = function registerWallet(bot) {
   bot.action('wallet_history', async (ctx) => {
     await ctx.answerCbQuery();
     const user = await User.findByTelegramId(ctx.from.id);
-    if (!user) return ctx.reply('❌ User not found.');
+    if (!user) return ctx.reply('❌ User not found. Please /start first.');
 
     const txs = await getHistory(user._id, { limit: 10, wallet: 'KS' });
     if (!txs.length) return ctx.reply('📜 No KS transactions yet. Use /topup to top up your wallet.');
@@ -83,13 +96,19 @@ module.exports = function registerWallet(bot) {
       return `${icon} ${sign}${t.amount.toLocaleString()} KS  ${dot}  _${formatDate(t.timestamp)}_`;
     });
 
-    await ctx.reply(`📜 *KS Transaction History*\n\n${lines.join('\n')}`, { parse_mode: 'Markdown' });
+    await ctx.reply(
+      `📜 *KS Transaction History*\n\n${lines.join('\n')}`,
+      {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard([[Markup.button.callback('🔙 Back to Wallet', 'nav:go:wallet_view')]]),
+      }
+    );
   });
 
   bot.action('coin_history', async (ctx) => {
     await ctx.answerCbQuery();
     const user = await User.findByTelegramId(ctx.from.id);
-    if (!user) return ctx.reply('❌ User not found.');
+    if (!user) return ctx.reply('❌ User not found. Please /start first.');
 
     const txs = await getHistory(user._id, { limit: 10, wallet: 'Coin' });
     if (!txs.length) return ctx.reply('🪙 No coin transactions yet.');
@@ -99,6 +118,12 @@ module.exports = function registerWallet(bot) {
       return `🎁 ${sign}${t.amount.toLocaleString()} MC  _${formatDate(t.timestamp)}_`;
     });
 
-    await ctx.reply(`🪙 *Mental Coin History*\n\n${lines.join('\n')}`, { parse_mode: 'Markdown' });
+    await ctx.reply(
+      `🪙 *Mental Coin History*\n\n${lines.join('\n')}`,
+      {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard([[Markup.button.callback('🔙 Back to Wallet', 'nav:go:wallet_view')]]),
+      }
+    );
   });
 };
