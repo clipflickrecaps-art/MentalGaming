@@ -47,7 +47,7 @@ Nav.register({
         [Markup.button.callback('🤖 Get AI Help',        'support_ai_start')],
         [Markup.button.callback('📦 Order Issue',        'support_ai_start')],
         [Markup.button.callback('💳 Payment / Wallet',   'support_ai_start')],
-        [Nav.backButton('🔙 Main Menu')],
+        Nav.backButton('🔙 Main Menu'),
       ]),
     };
   },

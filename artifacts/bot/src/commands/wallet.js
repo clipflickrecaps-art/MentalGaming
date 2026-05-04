@@ -44,7 +44,7 @@ Nav.register({
         [Markup.button.callback('💳 Top Up Wallet',        'start_topup')],
         [Markup.button.callback('📜 Transaction History',  'wallet_history')],
         [Markup.button.callback('🎁 Coin History',         'coin_history')],
-        [Nav.backButton('🔙 Main Menu')],
+        Nav.backButton('🔙 Main Menu'),
       ]),
     };
   },

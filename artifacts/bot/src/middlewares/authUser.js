@@ -7,6 +7,11 @@ function attachUser() {
     try {
       const user = await User.findOrCreate(ctx.from.id, ctx.from.username, ctx.from.first_name);
 
+      if (!user) {
+        console.error('[AuthUser] findOrCreate returned null for:', ctx.from.id);
+        return next();
+      }
+
       if (user.isBlocked) {
         return ctx.reply('🚫 Your account has been suspended. Contact support.');
       }

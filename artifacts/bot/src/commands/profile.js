@@ -89,7 +89,7 @@ Nav.register({
       keyboard: Markup.inlineKeyboard([
         [Markup.button.callback('💳 Top Up', 'start_topup'), Markup.button.callback('📜 History', 'wallet_history')],
         [Markup.button.callback('📊 Tier Progress', 'profile_progress'), Markup.button.callback('⚙️ Settings', 'nav:go:settings_view')],
-        [Nav.backButton('🔙 Main Menu')],
+        Nav.backButton('🔙 Main Menu'),
       ]),
     };
   },

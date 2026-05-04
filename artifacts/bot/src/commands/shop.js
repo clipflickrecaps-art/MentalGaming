@@ -10,7 +10,7 @@ const { loadingMessage, resolveMessage } = require('../utils/animations');
 const { buildMessage, price, truncate } = require('../utils/ui');
 
 function backRow() {
-  return [Nav.backButton()];
+  return Nav.backButton();
 }
 
 Nav.register({
@@ -36,8 +36,8 @@ Nav.register({
     ]);
 
     const keyboard = Markup.inlineKeyboard([
-      [Nav.folderButton('Shop', 'shop'), Nav.itemButton('My Orders', 'my_orders', '📦')],
-      [Nav.itemButton('Wallet', 'wallet_view', '💰'), Nav.itemButton('Profile', 'profile_view', '👤')],
+      [Nav.itemButton('Shop', 'nav:go:shop', '🛒'), Nav.itemButton('My Orders', 'my_orders', '📦')],
+      [Nav.itemButton('Wallet', 'wallet_view', '💰'), Nav.itemButton('My Profile', 'profile_view', '👤')],
       [Nav.itemButton('Support', 'support_view', '💬'), Nav.itemButton('Settings', 'settings_view', '⚙️')],
     ]);
 
@@ -202,7 +202,7 @@ module.exports = function registerShop(bot) {
       await resolveMessage(ctx, ref, text, {
         ...Markup.inlineKeyboard([
           [Markup.button.callback('🛒 Order Now', `order_start:${product._id}`)],
-          [Nav.backButton()],
+          Nav.backButton(),
         ]),
       });
     } catch (err) {
