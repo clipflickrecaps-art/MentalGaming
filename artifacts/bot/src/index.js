@@ -271,7 +271,21 @@ async function bootstrap() {
   console.log(`[Bot] ✅ @${bot.botInfo?.username} is live!`);
 }
 
-bootstrap().catch((err) => {
-  console.error('[Bot] ❌ Fatal startup error:', err);
-  process.exit(1);
-});
+async function bootstrapWithRetry(attempt = 1) {
+  try {
+    await bootstrap();
+  } catch (err) {
+    const is409 = err?.response?.error_code === 409 ||
+                  (err?.message || '').includes('409');
+    if (is409 && attempt <= 5) {
+      const waitSec = attempt * 15;
+      console.warn(`[Bot] ⚠️ Conflict (409) — another instance may be running. Retrying in ${waitSec}s... (attempt ${attempt}/5)`);
+      await new Promise((r) => setTimeout(r, waitSec * 1000));
+      return bootstrapWithRetry(attempt + 1);
+    }
+    console.error('[Bot] ❌ Fatal startup error:', err);
+    process.exit(1);
+  }
+}
+
+bootstrapWithRetry();

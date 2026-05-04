@@ -17,13 +17,14 @@
  *   Welcome header is decorated by StyleService based on the active seasonal theme.
  */
 
-const { Markup }           = require('telegraf');
-const { mainMenuKeyboard } = require('../utils/keyboard');
-const { registerReferral } = require('../services/ReferralService');
-const StyleService          = require('../services/StyleService');
-const SystemStatus          = require('../models/SystemStatus');
-const User                  = require('../models/User');
-const Product               = require('../models/Product');
+const { Markup }                              = require('telegraf');
+const { mainMenuKeyboard, adminMenuKeyboard } = require('../utils/keyboard');
+const { registerReferral }                    = require('../services/ReferralService');
+const StyleService                             = require('../services/StyleService');
+const SystemStatus                             = require('../models/SystemStatus');
+const User                                     = require('../models/User');
+const Product                                  = require('../models/Product');
+const { config }                               = require('../../config/settings');
 
 // ── Attribution helper ────────────────────────────────────────────────────────
 
@@ -135,6 +136,21 @@ module.exports = function registerStart(bot) {
         { parse_mode: 'Markdown' }
       );
       return ctx.scene.enter('onboarding');
+    }
+
+    // ── Admin shortcut — bypass user menu entirely ────────────────────────────
+    const isAdmin = Number(ctx.from.id) === Number(config.bot.adminId);
+    if (isAdmin) {
+      await ctx.reply(
+        `🔧 *Admin Panel* — Mental Gaming Store\n\n` +
+        `👋 Welcome back, *${name}*!\n` +
+        `_You are logged in as the bot owner._`,
+        {
+          parse_mode: 'Markdown',
+          ...adminMenuKeyboard(),
+        }
+      );
+      return;
     }
 
     // ── Returning user — seasonal welcome ─────────────────────────────────────

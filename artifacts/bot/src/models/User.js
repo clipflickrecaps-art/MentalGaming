@@ -91,14 +91,23 @@ userSchema.statics.findOrCreate = async function (telegramId, username, firstNam
     if (username)  setFields.username   = username;
     if (firstName) setFields.first_name = firstName;
 
-    return await this.findOneAndUpdate(
+    const user = await this.findOneAndUpdate(
       { telegramId },
       { $setOnInsert: { telegramId }, $set: setFields },
       { upsert: true, new: true, setDefaultsOnInsert: true }
     );
+
+    // Mongoose 8.x can return null on upsert in some edge cases — fallback to direct find
+    if (!user) {
+      console.warn('[User] findOneAndUpdate returned null, falling back to findOne for:', telegramId);
+      return this.findOne({ telegramId });
+    }
+    return user;
   } catch (err) {
     if (err.code === 11000) return this.findOne({ telegramId });
-    throw err;
+    console.error('[User] findOrCreate error for', telegramId, ':', err.message);
+    // Last-resort fallback — never let auth crash the bot
+    return this.findOne({ telegramId }) || null;
   }
 };
 
