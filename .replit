@@ -9,15 +9,24 @@ args = ["pnpm", "store", "prune"]
 env = { "CI" = "true" }
 
 [workflows]
-runButton = "Bot Only"
+runButton = "Project"
 
 [[workflows.workflow]]
-name = "Bot Only"
-author = "user"
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "artifacts/bot: Telegram Bot"
+
+[[workflows.workflow]]
+name = "artifacts/bot: Telegram Bot"
+author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd bot && node src/index.js"
+args = "pnpm --filter @workspace/bot run dev"
 
 [workflows.workflow.metadata]
 outputType = "console"
@@ -33,3 +42,35 @@ timeoutMs = 20000
 [[ports]]
 localPort = 8080
 externalPort = 8080
+
+[[ports]]
+localPort = 8081
+externalPort = 80
+
+[[ports]]
+localPort = 8082
+externalPort = 3000
+
+[[ports]]
+localPort = 8083
+externalPort = 3001
+
+[[ports]]
+localPort = 8084
+externalPort = 4200
+
+[[ports]]
+localPort = 8085
+externalPort = 3003
+
+[[ports]]
+localPort = 8086
+externalPort = 5000
+
+[[ports]]
+localPort = 8087
+externalPort = 5173
+
+[[ports]]
+localPort = 18150
+externalPort = 3002
