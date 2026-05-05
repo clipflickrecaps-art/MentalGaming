@@ -322,6 +322,12 @@ module.exports = function registerAdminGameConfig(bot) {
     const { config } = require('../../config/settings');
     if (Number(ctx.from?.id) !== Number(config.bot.adminId)) return next();
 
+    // Let slash commands flow through to their proper handlers
+    if (ctx.message?.text?.startsWith('/')) return next();
+
+    // Fast path: skip entirely if no wizard/edit session is active
+    if (!ctx.session?.adminAddProduct && !ctx.session?.gcEdit) return next();
+
     // ── Product wizard ──────────────────────────────────────────────────────
     const addState = ctx.session?.adminAddProduct;
     if (addState) {

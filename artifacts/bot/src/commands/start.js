@@ -136,16 +136,13 @@ module.exports = function registerStart(bot) {
       return ctx.scene.enter('onboarding');
     }
 
-    // ── Admin — navigate to inline admin panel ────────────────────────────────
+    // ── Admin — single welcome message + inline admin panel ──────────────────
     const isAdmin = Number(ctx.from.id) === Number(config.bot.adminId);
     if (isAdmin) {
-      // Remove any existing reply keyboard silently, then show admin nav
-      const rm = await ctx.reply(
+      await ctx.reply(
         `🔧 *Admin Panel* — Mental Gaming Store\n👋 Welcome back, *${name}*!`,
         { parse_mode: 'Markdown', ...Markup.removeKeyboard() }
       );
-      // Delete the cleanup message so it's seamless
-      await ctx.telegram.deleteMessage(ctx.chat.id, rm.message_id).catch(() => {});
       return Nav.navigate(ctx, 'admin_main', false);
     }
 
@@ -153,7 +150,6 @@ module.exports = function registerStart(bot) {
     const season = await StyleService.getActiveSeason();
     const header = StyleService.buildWelcomeHeader(name, tier, season);
 
-    // Send welcome text — including Markup.removeKeyboard() removes any old reply keyboard
     await ctx.reply(
       header +
       (extraNote ? `\n${extraNote}` : '') +
@@ -161,7 +157,6 @@ module.exports = function registerStart(bot) {
       { parse_mode: 'Markdown', ...Markup.removeKeyboard() }
     );
 
-    // Show the inline main menu
     await Nav.navigate(ctx, 'main', false);
   });
 };

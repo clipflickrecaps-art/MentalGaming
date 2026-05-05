@@ -137,7 +137,7 @@ module.exports = function registerAdmin(bot) {
     const promos = await Promo.find().sort({ createdAt: -1 }).limit(20);
     if (!promos.length) {
       return ctx.reply(
-        `🎟 *Promo Codes*\n\nNo promo codes yet.\n\nTo create:\n\`/createpromo CODE Percent VALUE [maxUses]\`\nExample: \`/createpromo SAVE10 Percent 10 100\``,
+        `🎟 *Promo Codes*\n\nNo promo codes yet.\n\nTo create one, use the \`/createpromo\` command.\nExample: \`/createpromo SAVE10 Percentage 10 100\``,
         {
           parse_mode: 'Markdown',
           ...Markup.inlineKeyboard([[Markup.button.callback('🔙 Back', 'nav:go:admin_main')]]),
@@ -274,7 +274,20 @@ module.exports = function registerAdmin(bot) {
       ]),
     });
   });
-  bot.hears('📦 Manage Orders',   adminOnly(), (ctx) => ctx.callbackQuery ? null : bot.handleUpdate({ ...ctx.update, callback_query: { ...ctx.callbackQuery, data: 'admin_orders_action' } }));
+  bot.hears('📦 Manage Orders', adminOnly(), async (ctx) => {
+    const pending    = await Order.countDocuments({ status: 'Pending' });
+    const processing = await Order.countDocuments({ status: 'Processing' });
+    await ctx.reply(
+      `📦 *Order Management*\n\n🟡 Pending: *${pending}*\n🔵 Processing: *${processing}*`,
+      {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard([
+          [Markup.button.callback('🟡 View Pending', 'admin_pending_orders')],
+          [Markup.button.callback('📋 All Orders',   'admin_all_orders')],
+        ]),
+      }
+    );
+  });
   bot.hears('🛍️ Manage Products', adminOnly(), async (ctx) => {
     const [total, active] = await Promise.all([Product.countDocuments({}), Product.countDocuments({ isActive: true })]);
     await ctx.reply(`🛍️ *Product Management*\n\n✅ Active: *${active}*\n🔴 Inactive: *${total - active}*\n📦 Total: *${total}*`, {
