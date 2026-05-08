@@ -1,28 +1,9 @@
-/**
- * SupportScene — AI-powered customer support wizard
- *
- * Step 0 → Topic selection
- * Step 1 → User types question → AI generates instant answer (with "thinking" animation)
- * Step 2 → Show AI answer → [✅ Solved!] [❌ Need human help]
- *   ✅ → Thank user + mark resolved
- *   ❌ → Ask for optional screenshot → Create SupportTicket → Notify admin → Ticket ID to user
- *
- * Auto-escalation:
- *   - AI signals [ESCALATE] → skip to human automatically
- *   - High frustration detected → priority = Urgent
- *
- * Screenshot upload:
- *   - After "Need human help" → ask user to optionally attach screenshot
- *   - Session flag `awaitingTicketScreenshot` handled via photo interceptor in support.js
- */
-
+/** Fullfix10 SupportScene — reply keyboard only. */
 const { Scenes, Markup } = require('telegraf');
 const { answerSupportQuery, analyzeSentiment } = require('../services/aiService');
 const { config } = require('../../config/settings');
-const { price, formatDate } = require('../utils/ui');
 const SupportTicket = require('../models/SupportTicket');
-const User  = require('../models/User');
-const Order = require('../models/Order');
+const User = require('../models/User');
 
 const TOPIC_META = {
   order:   { label: '📦 Order Issue',      emoji: '📦', priority: 'High'   },
@@ -31,345 +12,106 @@ const TOPIC_META = {
   bug:     { label: '🐛 Bug Report',       emoji: '🐛', priority: 'Urgent' },
   general: { label: '❓ General Query',    emoji: '❓', priority: 'Normal' },
 };
+const TOPIC_BUTTONS = {
+  '📦 Order Issue': 'order', '💳 Payment / Wallet': 'payment', '🎮 Game Help': 'game', '🐛 Bug Report': 'bug', '❓ General Query': 'general'
+};
+function kb(rows) { return Markup.keyboard(rows).resize(); }
+const MAIN_MENU = [['🛒 Shop','📦 My Orders'], ['💰 Wallet','👤 My Profile'], ['🎰 Spin Wheel','💬 Support'], ['⚙️ Settings']];
+const TOPIC_KB = [['📦 Order Issue','💳 Payment / Wallet'], ['🎮 Game Help','🐛 Bug Report'], ['❓ General Query'], ['❌ Cancel']];
+const AFTER_AI_KB = [['✅ Solved', '👨 Human Support'], ['🔙 Back to Main']];
+const SCREENSHOT_KB = [['📎 Send Screenshot'], ['⏭ Skip Screenshot'], ['🔙 Back to Main']];
 
-async function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
+async function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
+async function showThinking(ctx){ const msg=await ctx.reply('🤖 AI is thinking...'); return {chatId:ctx.chat.id,messageId:msg.message_id}; }
+function clear(ctx){ ctx.session.supportTopic=null; ctx.session.supportUserMessage=null; ctx.session.supportAiResponse=null; ctx.session.supportSentiment=null; ctx.session.supportShouldEscalate=null; }
+async function backMain(ctx){ clear(ctx); await ctx.reply('🏠 Main Menu', kb(MAIN_MENU)); return ctx.scene.leave(); }
 
-// ── Typing animation ──────────────────────────────────────────────────────────
-async function showThinking(ctx) {
-  const msg = await ctx.reply('🤖 _AI is thinking..._', { parse_mode: 'Markdown' });
-  const frames = ['🤖 .  ', '🤖 .. ', '🤖 ...'];
-  for (let i = 0; i < 3; i++) {
-    await sleep(600);
-    await ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, undefined, frames[i]).catch(() => {});
-  }
-  return { chatId: ctx.chat.id, messageId: msg.message_id };
-}
-
-// ── Admin ticket notification ─────────────────────────────────────────────────
 async function notifyAdminNewTicket(ctx, ticket, user) {
-  const topicMeta     = TOPIC_META[ticket.topic] || TOPIC_META.general;
-  const userTag       = user.username ? `@${user.username}` : `ID: ${ticket.telegramId}`;
-  const priorityBadge = { Normal: '🟡', High: '🟠', Urgent: '🔴' }[ticket.priority] || '🟡';
-  const hasScreenshot = ticket.screenshots?.length > 0;
-
-  const text =
-    `📩 *New Support Ticket*\n\n` +
-    `🎫 Ticket: \`${ticket.ticketId}\`\n` +
-    `${priorityBadge} Priority: *${ticket.priority}*\n` +
-    `${topicMeta.emoji} Topic: *${topicMeta.label}*\n` +
-    `👤 User: ${userTag}\n` +
-    `⭐ Tier: ${user.membershipTier}\n` +
-    `${hasScreenshot ? '📎 Screenshot: Attached\n' : ''}` +
-    `🕐 Time: ${new Date().toLocaleString('en-GB', { timeZone: 'Asia/Rangoon' })} MMT\n\n` +
-    `*User Message:*\n${ticket.userMessage}\n\n` +
-    (ticket.aiResponse
-      ? `*AI Attempted Response:*\n_${ticket.aiResponse.slice(0, 200)}${ticket.aiResponse.length > 200 ? '...' : ''}_\n\n`
-      : '') +
-    `_User said AI answer was not helpful — needs human support._`;
-
-  try {
-    await ctx.telegram.sendMessage(config.bot.adminId, text, {
-      parse_mode: 'Markdown',
-      ...Markup.inlineKeyboard([
-        [
-          Markup.button.callback(`💬 Reply`,          `ticket_reply:${ticket.ticketId}`),
-          Markup.button.callback(`📜 Template`,       `tpl_pick:ticket:${ticket.ticketId}`),
-        ],
-        [
-          Markup.button.callback('✅ Mark Resolved',  `ticket_resolve:${ticket.ticketId}`),
-          Markup.button.callback('🔵 Assign to Me',   `ticket_assign:${ticket.ticketId}`),
-        ],
-        [Markup.button.callback('🔴 Mark Urgent',     `ticket_urgent:${ticket.ticketId}`)],
-      ]),
-    });
-
-    // If there's a screenshot — forward it too
-    if (hasScreenshot) {
-      for (const fileId of ticket.screenshots) {
-        await ctx.telegram.sendPhoto(config.bot.adminId, fileId, {
-          caption: `📎 Screenshot for ticket \`${ticket.ticketId}\``,
-          parse_mode: 'Markdown',
-        }).catch(() => {});
-      }
-    }
-  } catch (err) {
-    console.error('[SupportScene] Admin notify failed:', err.message);
-  }
+  const topicMeta = TOPIC_META[ticket.topic] || TOPIC_META.general;
+  const userTag = user.username ? `@${user.username}` : `ID: ${ticket.telegramId}`;
+  const text = `📩 New Support Ticket\n\n🎫 ${ticket.ticketId}\n${topicMeta.emoji} ${topicMeta.label}\n👤 ${userTag}\n⚠️ Priority: ${ticket.priority}\n\n${ticket.userMessage}\n\nAI: ${ticket.aiResponse ? ticket.aiResponse.slice(0,300) : '-'}`;
+  try { await ctx.telegram.sendMessage(config.bot.adminId, text); } catch(e) { console.error('[SupportScene] Admin notify failed:', e.message); }
 }
 
-const supportScene = new Scenes.WizardScene(
-  'support_scene',
-
-  // ── Step 0: Topic selection ──────────────────────────────────────────────
+const supportScene = new Scenes.WizardScene('support_scene',
   async (ctx) => {
-    await ctx.reply(
-      `💬 *Customer Support*\n\n` +
-      `🤖 Our AI assistant will try to help you instantly.\n` +
-      `If it can't solve your issue, we'll connect you with a human.\n\n` +
-      `*What do you need help with?*`,
-      {
-        parse_mode: 'Markdown',
-        ...Markup.inlineKeyboard([
-          [Markup.button.callback('📦 Order Issue',      'sup_topic:order')],
-          [Markup.button.callback('💳 Payment / Wallet', 'sup_topic:payment')],
-          [Markup.button.callback('🎮 Game Help',         'sup_topic:game')],
-          [Markup.button.callback('🐛 Bug Report',        'sup_topic:bug')],
-          [Markup.button.callback('❓ General Query',     'sup_topic:general')],
-          [Markup.button.callback('❌ Cancel',            'sup_cancel')],
-        ]),
-      }
-    );
+    await ctx.reply('💬 Customer Support\n\nAI assistant အရင်ဖြေပေးမယ်။ မဖြေရှင်းနိုင်ရင် human support ticket ဖွင့်ပေးမယ်။\n\nဘာကူညီရမလဲ?', kb(TOPIC_KB));
     return ctx.wizard.next();
   },
-
-  // ── Step 1: Await question text ──────────────────────────────────────────
   async (ctx) => {
-    if (!ctx.message?.text) return;
-
-    const topic   = ctx.session.supportTopic || 'general';
-    const message = ctx.message.text.trim();
+    const text = ctx.message?.text?.trim();
+    if (!text) return;
+    if (text === '❌ Cancel' || text === '🔙 Back to Main') return backMain(ctx);
+    const topic = TOPIC_BUTTONS[text];
+    if (!topic) return ctx.reply('အောက်က topic button တစ်ခုရွေးပါ။', kb(TOPIC_KB));
+    ctx.session.supportTopic = topic;
+    const hint = { order:'Order ID ပါရင်ထည့်ရေးပါ။', payment:'amount + payment method + date ထည့်ရေးပါ။', game:'game name နဲ့လိုတာရေးပါ။', bug:'ဖြစ်သွားတဲ့ step တွေရေးပါ။', general:'မေးချင်တာရေးပါ။' }[topic];
+    await ctx.reply(`${TOPIC_META[topic].emoji} ${TOPIC_META[topic].label}\n\n${hint}\n\nမေးခွန်းရေးပါ။`, kb([['🔙 Back to Main']]));
+    return ctx.wizard.next();
+  },
+  async (ctx) => {
+    const message = ctx.message?.text?.trim();
+    if (!message) return;
+    if (message === '🔙 Back to Main') return backMain(ctx);
+    const topic = ctx.session.supportTopic || 'general';
     ctx.session.supportUserMessage = message;
-
-    const thinkRef = await showThinking(ctx);
-
-    // Run AI + sentiment in parallel
+    const think = await showThinking(ctx);
     const [aiResult, sentiment] = await Promise.all([
-      answerSupportQuery(message, { telegramId: ctx.from.id, topic }),
-      analyzeSentiment(message),
+      answerSupportQuery(message, { telegramId: ctx.from.id, topic }).catch(e=>({answer:null, shouldEscalate:true, error:e.message})),
+      analyzeSentiment(message).catch(()=> 'neutral'),
     ]);
-
-    ctx.session.supportAiResponse    = aiResult.answer;
-    ctx.session.supportShouldEscalate = aiResult.shouldEscalate;
-    ctx.session.supportSentiment     = sentiment;
-
-    const topicMeta = TOPIC_META[topic] || TOPIC_META.general;
-
-    // If AI signals escalation → skip straight to human
-    if (aiResult.shouldEscalate || !aiResult.answer) {
-      await ctx.telegram.editMessageText(
-        thinkRef.chatId, thinkRef.messageId, undefined,
-        `🤖 _Let me connect you with our support team..._`,
-        { parse_mode: 'Markdown' }
-      ).catch(() => {});
-
-      await sleep(800);
+    ctx.session.supportAiResponse = aiResult.answer;
+    ctx.session.supportSentiment = sentiment;
+    if (!aiResult.answer || aiResult.shouldEscalate) {
+      await ctx.telegram.deleteMessage(think.chatId, think.messageId).catch(()=>{});
       return askForScreenshot(ctx);
     }
-
-    // Show AI answer
-    const sentimentNote = ['frustrated', 'angry'].includes(sentiment)
-      ? `\n\n_I can see you're frustrated — if this doesn't help, I'll connect you with a human right away._`
-      : '';
-
-    await ctx.telegram.editMessageText(
-      thinkRef.chatId, thinkRef.messageId, undefined,
-      `🤖 *AI Assistant*\n\n${aiResult.answer}${sentimentNote}`,
-      { parse_mode: 'Markdown' }
-    ).catch(() => {});
-
-    await ctx.reply(
-      `Was this helpful?`,
-      {
-        ...Markup.inlineKeyboard([
-          [Markup.button.callback('✅ Yes, solved!',        'sup_solved')],
-          [Markup.button.callback('❌ No, need human help', 'sup_escalate')],
-        ]),
-      }
-    );
-
+    await ctx.telegram.deleteMessage(think.chatId, think.messageId).catch(()=>{});
+    await ctx.reply(`🤖 AI Answer\n\n${aiResult.answer}\n\nဒီအဖြေက အဆင်ပြေလား?`, kb(AFTER_AI_KB));
     return ctx.wizard.next();
   },
-
-  // ── Step 2: Placeholder — handled by actions ──────────────────────────────
-  async (ctx) => ctx.scene.leave()
+  async (ctx) => {
+    const text = ctx.message?.text?.trim();
+    if (text === '✅ Solved') { clear(ctx); await ctx.reply('✅ အဆင်ပြေသွားလို့ ဝမ်းသာပါတယ်။', kb(MAIN_MENU)); return ctx.scene.leave(); }
+    if (text === '👨 Human Support') return askForScreenshot(ctx);
+    if (text === '🔙 Back to Main') return backMain(ctx);
+    return ctx.reply('Button တစ်ခုရွေးပါ။', kb(AFTER_AI_KB));
+  }
 );
 
-// ── Action: cancel ─────────────────────────────────────────────────────────────
-supportScene.action('sup_cancel', async (ctx) => {
-  await ctx.answerCbQuery('Cancelled');
-  clearSupportSession(ctx);
-  await ctx.reply('❌ Support request cancelled.');
-  return ctx.scene.leave();
-});
-
-// ── Action: topic selected ────────────────────────────────────────────────────
-supportScene.action(/^sup_topic:(.+)$/, async (ctx) => {
-  const topic = ctx.match[1];
-  await ctx.answerCbQuery();
-  await ctx.editMessageReplyMarkup({ inline_keyboard: [] }).catch(() => {});
-
-  ctx.session.supportTopic = topic;
-  const topicMeta = TOPIC_META[topic] || TOPIC_META.general;
-
-  const hint = {
-    order:   'Include your Order ID if you have one (from /orders).',
-    payment: 'Include the amount, payment method, and date.',
-    game:    'Tell us which game and what you need help with.',
-    bug:     'Describe what happened step by step.',
-    general: 'Ask anything about our store or services.',
-  }[topic] || '';
-
-  await ctx.reply(
-    `${topicMeta.emoji} *${topicMeta.label}*\n\n` +
-    `Please describe your issue:\n_${hint}_`,
-    { parse_mode: 'Markdown' }
-  );
-
-  ctx.wizard.selectStep(1);
-});
-
-// ── Action: user says solved ──────────────────────────────────────────────────
-supportScene.action('sup_solved', async (ctx) => {
-  await ctx.answerCbQuery('Great!');
-  await ctx.editMessageReplyMarkup({ inline_keyboard: [] }).catch(() => {});
-
-  await ctx.reply(
-    `✅ *Glad we could help!*\n\n` +
-    `If you have more questions, use /support anytime.\n\n` +
-    `_Thank you for choosing Mental Gaming Store! 🎮_`,
-    { parse_mode: 'Markdown' }
-  );
-
-  clearSupportSession(ctx);
-  return ctx.scene.leave();
-});
-
-// ── Action: escalate to human → ask for screenshot first ─────────────────────
-supportScene.action('sup_escalate', async (ctx) => {
-  await ctx.answerCbQuery('Connecting you with our team...');
-  await ctx.editMessageReplyMarkup({ inline_keyboard: [] }).catch(() => {});
-  return askForScreenshot(ctx);
-});
-
-// ── Ask for screenshot before creating ticket ─────────────────────────────────
 async function askForScreenshot(ctx) {
-  // Store pending ticket data
   ctx.session.pendingTicketData = {
-    topic:      ctx.session.supportTopic || 'general',
+    topic: ctx.session.supportTopic || 'general',
     userMessage: ctx.session.supportUserMessage || '(not provided)',
-    aiResponse:  ctx.session.supportAiResponse || null,
-    sentiment:   ctx.session.supportSentiment  || 'neutral',
+    aiResponse: ctx.session.supportAiResponse || null,
+    sentiment: ctx.session.supportSentiment || 'neutral',
   };
-  clearSupportSession(ctx);
-
-  await ctx.reply(
-    `📎 *Optional: Attach a Screenshot*\n\n` +
-    `Would you like to send a screenshot to help our team understand your issue faster?`,
-    {
-      parse_mode: 'Markdown',
-      ...Markup.inlineKeyboard([
-        [Markup.button.callback('📎 Yes, I\'ll attach one', 'sup_attach_screenshot')],
-        [Markup.button.callback('⏭️ Skip — Create Ticket Now', 'sup_skip_screenshot')],
-      ]),
-    }
-  );
-
+  clear(ctx);
+  await ctx.reply('📎 Screenshot ပို့ချင်ရင် photo အနေနဲ့ပို့ပါ။ မလိုရင် ⏭ Skip Screenshot နှိပ်ပါ။', kb(SCREENSHOT_KB));
+  ctx.session.awaitingTicketScreenshot = true;
   return ctx.scene.leave();
 }
 
-// ── Action: will attach screenshot ────────────────────────────────────────────
-supportScene.action('sup_attach_screenshot', async (ctx) => {
-  await ctx.answerCbQuery();
-  await ctx.editMessageReplyMarkup({ inline_keyboard: [] }).catch(() => {});
-  ctx.session.awaitingTicketScreenshot = true;
-
-  await ctx.reply(
-    `📸 *Send your screenshot now.*\n\n` +
-    `Send it as a *photo* (not a file).\n` +
-    `You can also type /skip to create the ticket without a screenshot.`,
-    { parse_mode: 'Markdown' }
-  );
-});
-
-// ── Action: skip screenshot ───────────────────────────────────────────────────
-supportScene.action('sup_skip_screenshot', async (ctx) => {
-  await ctx.answerCbQuery('Creating your ticket...');
-  await ctx.editMessageReplyMarkup({ inline_keyboard: [] }).catch(() => {});
-  ctx.session.awaitingTicketScreenshot = false;
-  return createTicketFromSession(ctx, []);
-});
-
-// ── Action: cancel ────────────────────────────────────────────────────────────
-supportScene.action('sup_cancel', async (ctx) => {
-  await ctx.answerCbQuery('Cancelled');
-  await ctx.editMessageText('❌ Support session cancelled. Use /support anytime.');
-  clearSupportSession(ctx);
-  return ctx.scene.leave();
-});
-
-// ── Create ticket from pending session data ───────────────────────────────────
 async function createTicketFromSession(ctx, screenshots = []) {
   const data = ctx.session.pendingTicketData;
-  if (!data) {
-    await ctx.reply('❌ Session expired. Please use /support again.');
-    return;
-  }
+  if (!data) { await ctx.reply('❌ Session expired. Please use /support again.', kb(MAIN_MENU)); return; }
   ctx.session.pendingTicketData = null;
   ctx.session.awaitingTicketScreenshot = false;
-
   return escalateToHuman(ctx, data.topic, data.userMessage, data.aiResponse, data.sentiment, screenshots);
 }
 
-// ── Escalation handler ────────────────────────────────────────────────────────
 async function escalateToHuman(ctx, topic, userMessage, aiResponse, sentiment, screenshots = []) {
   const user = await User.findByTelegramId(ctx.from.id);
-  if (!user) {
-    await ctx.reply('❌ Session error. Please try /support again.');
-    return;
-  }
-
+  if (!user) { await ctx.reply('❌ Session error. Please try /support again.', kb(MAIN_MENU)); return; }
   const topicMeta = TOPIC_META[topic] || TOPIC_META.general;
   let priority = topicMeta.priority;
-  if (['angry', 'frustrated'].includes(sentiment) && priority !== 'Urgent') priority = 'High';
+  if (['angry','frustrated'].includes(sentiment) && priority !== 'Urgent') priority = 'High';
   if (topic === 'bug') priority = 'Urgent';
-
-  // Auto-extract subject from first sentence of userMessage
-  const subject = userMessage.split(/[.!?\n]/)[0].slice(0, 80) || null;
-
   const ticketId = await SupportTicket.generateId();
-
-  const ticket = await SupportTicket.create({
-    ticketId,
-    userId:      user._id,
-    telegramId:  ctx.from.id,
-    username:    ctx.from.username || null,
-    subject,
-    topic,
-    userMessage,
-    aiResponse,
-    screenshots,
-    status:      'Open',
-    priority,
-    replies:     [],
-  });
-
+  const ticket = await SupportTicket.create({ ticketId, userId:user._id, telegramId:ctx.from.id, username:ctx.from.username||null, subject:userMessage.split(/[.!?\n]/)[0].slice(0,80)||null, topic, userMessage, aiResponse, screenshots, status:'Open', priority, replies:[] });
   await notifyAdminNewTicket(ctx, ticket, user);
-
-  const priorityBadge = { Normal: '🟡', High: '🟠', Urgent: '🔴' }[priority] || '🟡';
-
-  await ctx.reply(
-    `✅ *Support Ticket Created!*\n\n` +
-    `🎫 Ticket ID: \`${ticketId}\`\n` +
-    `${topicMeta.emoji} Topic: *${topicMeta.label}*\n` +
-    `${priorityBadge} Priority: *${priority}*\n` +
-    (screenshots.length ? `📎 Screenshot: *Attached*\n` : '') +
-    `\n⏰ *Support hours: 9AM – 11PM MMT*\n\n` +
-    `Our team will get back to you shortly.\n` +
-    `_Save your Ticket ID to follow up with /mytickets_`,
-    { parse_mode: 'Markdown' }
-  );
+  await ctx.reply(`✅ Support Ticket Created\n\n🎫 Ticket ID: ${ticketId}\n${topicMeta.emoji} Topic: ${topicMeta.label}\n⚠️ Priority: ${priority}\n\nSupport team ပြန်ဆက်သွယ်ပါမယ်။`, kb(MAIN_MENU));
 }
 
-// ── Session cleanup ───────────────────────────────────────────────────────────
-function clearSupportSession(ctx) {
-  ctx.session.supportTopic         = null;
-  ctx.session.supportUserMessage   = null;
-  ctx.session.supportAiResponse    = null;
-  ctx.session.supportSentiment     = null;
-  ctx.session.supportShouldEscalate = null;
-}
-
-// Export the createTicketFromSession helper for use in support.js photo handler
 supportScene.createTicketFromSession = createTicketFromSession;
-
 module.exports = supportScene;

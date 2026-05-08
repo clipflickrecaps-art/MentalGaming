@@ -32,6 +32,7 @@ const ADMIN_SESSION_KEYS = [
   'adminTopupAskInfo',
   'adminAddPayment',
   'adminFlow',
+  'adminFlow9',
   'exportAwaitingCustomRange',
   'addFaq',
   'faqAwaitingSearch',
@@ -91,10 +92,7 @@ module.exports = function registerAmbient(bot) {
       return ctx.reply(
         `🤖 I'm having trouble connecting right now.\n\nFor help, please use /faq or /support.`,
         {
-          ...Markup.inlineKeyboard([
-            [Markup.button.callback('📚 Browse FAQ',          'faq_back_home')],
-            [Markup.button.callback('🎫 Open Support Ticket', 'support_ai_start')],
-          ]),
+          ...Markup.keyboard([['📚 FAQ', '💬 Support'], ['🔙 Back to Main']]).resize(),
         }
       );
     }
@@ -111,16 +109,8 @@ module.exports = function registerAmbient(bot) {
 
     // ── Send response ──────────────────────────────────────────────────────
     const keyboard = shouldOpenTicket
-      ? Markup.inlineKeyboard([
-          [Markup.button.callback('🎫 Open Support Ticket', 'support_ai_start')],
-          [Markup.button.callback('📚 Browse FAQ',           'faq_back_home')],
-        ])
-      : Markup.inlineKeyboard([
-          [
-            Markup.button.callback('🎫 Need more help?', 'support_ai_start'),
-            Markup.button.callback('📚 FAQ',             'faq_back_home'),
-          ],
-        ]);
+      ? Markup.keyboard([['💬 Support', '📚 FAQ'], ['🔙 Back to Main']]).resize()
+      : Markup.keyboard([['💬 Support', '📚 FAQ'], ['🔙 Back to Main']]).resize();
 
     await ctx.reply(`🤖 ${answer}`, { parse_mode: 'Markdown', ...keyboard });
   });

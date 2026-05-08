@@ -36,15 +36,14 @@ Nav.register({
       { title: null, lines: [t(ctx, 'choose')] },
     ]);
 
-    const keyboard = Markup.inlineKeyboard([
-      [Nav.itemButton(t(ctx, 'shop'),       'nav:go:shop',            '🛒'), Nav.itemButton(t(ctx, 'my_orders'),  'nav:go:my_orders',        '📦')],
-      [Nav.itemButton(t(ctx, 'wallet'),     'nav:go:wallet_view',     '💰'), Nav.itemButton(t(ctx, 'profile'), 'nav:go:profile_view',     '👤')],
-      [Nav.itemButton(t(ctx, 'checkin'),   'ci_do',                  '🗓'), Nav.itemButton(t(ctx, 'streak'),  'ci_streak',              '🔥')],
-      [Nav.itemButton(t(ctx, 'calendar'),   'ci_calendar',            '📅'), Nav.itemButton(t(ctx, 'spin'), 'spin_wheel_start',       '🎰')],
-      [Nav.itemButton(t(ctx, 'promo'), 'quick_promo',            '🎟'), Nav.itemButton(t(ctx, 'saved_ids'),   'quick_myids',            '📖')],
-      [Nav.itemButton(t(ctx, 'referral'),   'quick_referral',         '🔗'), Nav.itemButton(t(ctx, 'faq'),         'faq_back_home',          '📚')],
-      [Nav.itemButton(t(ctx, 'support'),    'nav:go:support_view',    '💬'), Nav.itemButton(t(ctx, 'settings'),   'nav:go:settings_view',   '⚙️')],
-    ]);
+    // Fullfix11: main menu must be reply keyboard only.
+    const keyboard = Markup.keyboard([
+      ['🛒 Shop', '📦 My Orders'],
+      ['💰 Wallet', '👤 My Profile'],
+      ['🗓 Check In', '🎰 Spin Wheel'],
+      ['📢 Channels', '💬 Support'],
+      ['📚 FAQ', '⚙️ Settings'],
+    ]).resize();
 
     return { text, keyboard };
   },

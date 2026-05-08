@@ -19,6 +19,39 @@ const { auditLog } = require('../services/logger');
 const { price, formatDate } = require('../utils/ui');
 const Order = require('../models/Order');
 
+
+function prettyInfoLabel(label = '', key = '') {
+  const raw = `${label} ${key}`.toLowerCase();
+  if (raw.includes('server') || raw.includes('zone')) return '🌐 Server ID';
+  if (raw.includes('player') && raw.includes('name')) return '👤 Player Name';
+  if (raw.includes('uid')) return '🆔 UID';
+  if (raw.includes('email')) return '📧 Email';
+  if (raw.includes('phone')) return '📱 Phone';
+  if (raw.includes('game') || raw.includes('player') || raw.includes('id')) return '🆔 Game ID';
+  return `📝 ${label || key || 'Info'}`;
+}
+
+function orderInfoLines(order) {
+  const lines = [];
+  const seen = new Set();
+  const add = (label, value, key = '') => {
+    const cleanValue = String(value || '').trim();
+    if (!cleanValue) return;
+    const cleanLabel = prettyInfoLabel(label, key);
+    const sig = `${cleanLabel}:${cleanValue}`.toLowerCase();
+    if (seen.has(sig)) return;
+    seen.add(sig);
+    lines.push(`${cleanLabel}: \`${cleanValue}\``);
+  };
+
+  if (Array.isArray(order.requiredInfo)) {
+    for (const item of order.requiredInfo) add(item?.label, item?.value, item?.key);
+  }
+  add('Game ID', order.gameId, 'gameId');
+  add('Server ID', order.zoneId, 'zoneId');
+  return lines.length ? lines.join('\n') + '\n' : '';
+}
+
 // ── Professional receipt ──────────────────────────────────────────────────────
 function buildReceipt(order, deliveredData) {
   const shortId  = order._id.toString().slice(-8).toUpperCase();
@@ -27,9 +60,7 @@ function buildReceipt(order, deliveredData) {
   const promoLine = order.promoCode
     ? `🎟 Promo: \`${order.promoCode}\` \\(\\-${order.promoDiscount?.toLocaleString() || 0} KS\\)\n`
     : '';
-  const idLine = order.gameId
-    ? `🎮 Game ID: \`${order.gameId}\`${order.zoneId ? ` / Zone: \`${order.zoneId}\`` : ''}\n`
-    : '';
+  const idLine = orderInfoLines(order);
 
   return (
     `🧾 *Order Receipt*\n` +
@@ -56,8 +87,8 @@ function buildReceipt(order, deliveredData) {
 function orderSummaryText(order) {
   const product  = order.productId?.name || 'Unknown';
   const user     = order.userId?.username ? `@${order.userId.username}` : `ID: ${order.userId?.telegramId}`;
-  const idLine   = order.gameId ? `\n🎮 Game ID: \`${order.gameId}\`${order.zoneId ? ` (Zone: ${order.zoneId})` : ''}` : '';
-  const typeIcon = order.productType === 'DigitalCode' ? '🎁' : '🎮';
+  const infoBlock = orderInfoLines(order).trim();
+  const idLine = infoBlock ? `\n${infoBlock}` : '';
   const tierLine = order.tierDiscount > 0 ? `\n🏷 Tier Discount (${order.tierDiscountPct}%): −${price(order.tierDiscount)}` : '';
   const promoLine = order.promoCode ? `\n🎟 Promo ${order.promoCode}: −${price(order.promoDiscount || 0)}` : '';
 
@@ -65,7 +96,7 @@ function orderSummaryText(order) {
     `🆔 Order: \`${order._id.toString().slice(-8).toUpperCase()}\`\n` +
     `👤 Customer: ${user}\n` +
     `📦 Product: ${product}\n` +
-    `${typeIcon} Type: ${order.productType}` +
+    `🎮 Type: ${order.productType || 'DirectTopup'}` +
     idLine +
     `\n💰 Original: ${price(order.originalAmount || order.amount)}` +
     tierLine +
@@ -76,19 +107,48 @@ function orderSummaryText(order) {
   );
 }
 
-function adminOrderActionKeyboard(orderId) {
-  return Markup.inlineKeyboard([
-    [
-      Markup.button.callback('✅ Complete',        `admin_complete:${orderId}`),
-      Markup.button.callback('🔄 Processing',      `admin_processing:${orderId}`),
-    ],
-    [Markup.button.callback('❌ Cancel & Refund', `admin_cancel_refund:${orderId}`)],
-    [
-      Markup.button.callback('💬 Message',         `admin_msg_user:${orderId}`),
-      Markup.button.callback('⚠️ Warn User',       `admin_warn_user:${orderId}`),
-    ],
-    [Markup.button.callback('📜 Use Template', `tpl_pick:order:${orderId}`)],
-  ]);
+const ADMIN_ORDER_ACTION_ROWS = [
+  ['✅ Complete', '🔄 Processing'],
+  ['❌ Cancel & Refund'],
+  ['💬 Message User', '⚠️ Warn User'],
+  ['📜 Use Template'],
+  ['⬅️ Back to Orders', '🏠 Admin Menu'],
+];
+
+function adminOrderActionKeyboard() {
+  return Markup.keyboard(ADMIN_ORDER_ACTION_ROWS).resize();
+}
+
+function adminOrdersKeyboard() {
+  return Markup.keyboard([['📦 Manage Orders', '🔄 Refresh Orders'], ['🏠 Admin Menu']]).resize();
+}
+
+function promptKeyboard() {
+  return Markup.keyboard([['❌ Cancel'], ['📦 Manage Orders', '🏠 Admin Menu']]).resize();
+}
+
+async function showOrderCard(ctx, order, title = '🟡 Pending Order') {
+  if (!ctx.session) ctx.session = {};
+  ctx.session.adminSelectedOrderId = order._id.toString();
+  await ctx.reply(`${title}\n\n${orderSummaryText(order)}`, {
+    parse_mode: 'Markdown',
+    ...adminOrderActionKeyboard(),
+  });
+}
+
+async function getSelectedOrder(ctx) {
+  const orderId = ctx.session?.adminSelectedOrderId;
+  if (!orderId) {
+    await ctx.reply('❌ No order selected. Please open 📦 Manage Orders or /pendingorders first.', adminOrdersKeyboard());
+    return null;
+  }
+  const order = await Order.findById(orderId).populate('userId').populate('productId');
+  if (!order) {
+    ctx.session.adminSelectedOrderId = null;
+    await ctx.reply('❌ Selected order not found. Please refresh orders.', adminOrdersKeyboard());
+    return null;
+  }
+  return order;
 }
 
 async function notifyCustomer(ctx, telegramId, text, extra = {}) {
@@ -129,7 +189,7 @@ module.exports = function registerAdminOrders(bot) {
     await ctx.reply(
       `🔄 *Order \`${shortId}\` — Marked as Processing*\n\n` +
       `👤 Customer has been notified with a live status update.`,
-      { parse_mode: 'Markdown', ...adminOrderActionKeyboard(orderId) }
+      { parse_mode: 'Markdown', ...adminOrderActionKeyboard() }
     );
   });
 
@@ -142,7 +202,7 @@ module.exports = function registerAdminOrders(bot) {
 
     await ctx.reply(
       `📋 *Order Details*\n\n${orderSummaryText(order)}`,
-      { parse_mode: 'Markdown', ...adminOrderActionKeyboard(orderId) }
+      { parse_mode: 'Markdown', ...adminOrderActionKeyboard() }
     );
   });
 
@@ -214,8 +274,9 @@ module.exports = function registerAdminOrders(bot) {
       ctx.session.adminPendingAction = { type: 'complete', orderId };
       await ctx.reply(
         `✅ *Completing Order* \`${orderId.slice(-8).toUpperCase()}\`\n\n` +
-        `📦 *${order.productId?.name}*\n🎮 Game ID: \`${order.gameId || 'N/A'}\`\n\n` +
-        `📝 Send the *delivery data* to the customer:`,
+        `📦 *${order.productId?.name}*\n` +
+        `${orderInfoLines(order) || '🎮 Game ID: `N/A`\n'}` +
+        `\n📝 Send the *delivery data* to the customer:`,
         { parse_mode: 'Markdown', ...Markup.forceReply() }
       );
     }
@@ -260,10 +321,149 @@ module.exports = function registerAdminOrders(bot) {
     );
   });
 
+
+  // ── Reply-keyboard order action mode (no inline buttons) ───────────────────
+  async function handleProcessing(ctx) {
+    const order = await getSelectedOrder(ctx);
+    if (!order) return;
+    const orderId = order._id.toString();
+    if (order.status === 'Processing') return ctx.reply('ℹ️ This order is already Processing.', adminOrderActionKeyboard());
+    if (order.status !== 'Pending') return ctx.reply(`❌ Order is already ${order.status}.`, adminOrdersKeyboard());
+
+    const updated = await markProcessing(orderId, ctx.from.id);
+    const customerTid = order.userId?.telegramId;
+    if (customerTid) {
+      try {
+        const trackMsg = await OrderTrackingService.sendProcessing(ctx.telegram, customerTid, updated);
+        if (trackMsg?.message_id) await Order.findByIdAndUpdate(orderId, { trackingMsgId: trackMsg.message_id });
+      } catch (e) {
+        console.error('[AdminOrders] Tracking update failed:', e.message);
+      }
+    }
+    await ctx.reply(`🔄 Order \`${orderId.slice(-8).toUpperCase()}\` marked as Processing.`, { parse_mode: 'Markdown', ...adminOrderActionKeyboard() });
+  }
+
+  async function handleComplete(ctx) {
+    const order = await getSelectedOrder(ctx);
+    if (!order) return;
+    const orderId = order._id.toString();
+    if (order.status !== 'Pending') return ctx.reply(`❌ Order is already ${order.status}.`, adminOrdersKeyboard());
+
+    if (order.productType === 'DigitalCode') {
+      const ref = { chatId: ctx.chat.id, messageId: (await ctx.reply('⌛ Completing digital code order...')).message_id };
+      try {
+        await checklist(ctx, ref, [
+          { label: 'Pulling digital code', delay: 600 },
+          { label: 'Assigning to order', delay: 700 },
+          { label: 'Sending receipt', delay: 600 },
+        ], `✅ *Order completed! Code sent to customer.*`);
+
+        const completedOrder = await completeOrder(orderId, ctx.from.id, null, ctx.telegram);
+        await auditLog(ctx.from.id, 'ORDER_COMPLETED', orderId, 'Order', { auto: true, ui: 'reply_keyboard' });
+        const customerTid = completedOrder.userId?.telegramId;
+        if (customerTid) {
+          try {
+            const trackMsg = await OrderTrackingService.sendDeliveredReceipt(ctx.telegram, customerTid, completedOrder, completedOrder.deliveredData);
+            if (trackMsg?.message_id) await Order.findByIdAndUpdate(completedOrder._id, { trackingMsgId: trackMsg.message_id });
+          } catch (e) {
+            await notifyCustomer(ctx, customerTid, `✅ *Order Complete!*\n\n📬 Your delivery:\n\`${completedOrder.deliveredData}\``);
+          }
+        }
+        ctx.session.adminSelectedOrderId = null;
+        await ctx.reply('✅ Completed.', adminOrdersKeyboard());
+      } catch (err) {
+        await ctx.telegram.editMessageText(ref.chatId, ref.messageId, undefined, `❌ ${err.message}`).catch(() => {});
+      }
+      return;
+    }
+
+    ctx.session.adminPendingAction = { type: 'complete', orderId };
+    await ctx.reply(
+      `✅ *Completing Order* \`${orderId.slice(-8).toUpperCase()}\`\n\n` +
+      `📦 *${order.productId?.name || 'Unknown'}*\n` +
+      `${orderInfoLines(order) || '🎮 Game ID: `N/A`\n'}` +
+      `\n📝 Send the *delivery data* to the customer:`,
+      { parse_mode: 'Markdown', ...promptKeyboard() }
+    );
+  }
+
+  async function handleCancelRefund(ctx) {
+    const order = await getSelectedOrder(ctx);
+    if (!order) return;
+    const orderId = order._id.toString();
+    if (order.status !== 'Pending') return ctx.reply(`❌ Order is already ${order.status}.`, adminOrdersKeyboard());
+    ctx.session.adminPendingAction = { type: 'cancel_refund', orderId };
+    await ctx.reply(
+      `❌ *Cancel & Refund* — \`${orderId.slice(-8).toUpperCase()}\`\n\n` +
+      `📦 *${order.productId?.name || 'Unknown'}*\n💰 Refund: *${price(order.amount)}*\n\n` +
+      `📝 Send the *reason* for cancellation:`,
+      { parse_mode: 'Markdown', ...promptKeyboard() }
+    );
+  }
+
+  async function handleMessageUser(ctx) {
+    const order = await getSelectedOrder(ctx);
+    if (!order) return;
+    const orderId = order._id.toString();
+    const userTelegramId = order.userId?.telegramId;
+    if (!userTelegramId) return ctx.reply('❌ User telegram ID not found on this order.', adminOrderActionKeyboard());
+    ctx.session.adminPendingAction = { type: 'msg_user', orderId, userTelegramId };
+    await ctx.reply(`💬 *Message User* — Order \`${orderId.slice(-8).toUpperCase()}\`\n\nSend your message to the customer:`, { parse_mode: 'Markdown', ...promptKeyboard() });
+  }
+
+  async function handleWarnUser(ctx) {
+    const order = await getSelectedOrder(ctx);
+    if (!order) return;
+    const orderId = order._id.toString();
+    const userId = order.userId?.telegramId;
+    const userTag = order.userId?.username ? `@${order.userId.username}` : `ID: ${userId}`;
+    if (!userId) return ctx.reply('❌ User not found on this order.', adminOrderActionKeyboard());
+    ctx.session.adminPendingAction = { type: 'warn_user', orderId, userId };
+    await ctx.reply(
+      `⚠️ *Issue Warning — Order* \`${orderId.slice(-8).toUpperCase()}\`\n\n` +
+      `👤 User: *${userTag}*\n📦 Product: *${order.productId?.name || 'Unknown'}*\n\n` +
+      `📝 Send the *reason* for this warning:`,
+      { parse_mode: 'Markdown', ...promptKeyboard() }
+    );
+  }
+
+  bot.hears('✅ Complete', requireRole('STAFF'), handleComplete);
+  bot.hears('🔄 Processing', requireRole('STAFF'), handleProcessing);
+  bot.hears('❌ Cancel & Refund', requireRole('STAFF'), handleCancelRefund);
+  bot.hears('💬 Message User', requireRole('STAFF'), handleMessageUser);
+  bot.hears('⚠️ Warn User', requireRole('STAFF'), handleWarnUser);
+  bot.hears('📜 Use Template', requireRole('STAFF'), async (ctx) => {
+    const order = await getSelectedOrder(ctx);
+    if (!order) return;
+    await ctx.reply(
+      `📜 Template mode is now reply-keyboard only.\n\n` +
+      `For now, press ✅ Complete and paste the delivery/template text you want to send to the customer.`,
+      adminOrderActionKeyboard()
+    );
+  });
+  bot.hears(['⬅️ Back to Orders', '🔄 Refresh Orders', '📦 Manage Orders'], requireRole('STAFF'), async (ctx) => {
+    const orders = await Order.find({ status: 'Pending' })
+      .populate('userId', 'username telegramId')
+      .populate('productId', 'name finalPrice productType')
+      .sort({ timestamp: -1 })
+      .limit(10);
+    if (!orders.length) {
+      ctx.session.adminSelectedOrderId = null;
+      return ctx.reply('✅ No pending orders right now.', adminOrdersKeyboard());
+    }
+    await ctx.reply(`📦 Pending orders: ${orders.length}\n\nShowing latest order. Use /pendingorders to list all.`, adminOrdersKeyboard());
+    return showOrderCard(ctx, orders[0]);
+  });
+
   // ── Text interceptor: handle all admin pending actions ────────────────────
   bot.on('text', async (ctx, next) => {
     const action = ctx.session?.adminPendingAction;
     if (!action) return next();
+
+    if (ctx.message?.text?.trim() === '❌ Cancel') {
+      ctx.session.adminPendingAction = null;
+      return ctx.reply('❌ Cancelled.', adminOrderActionKeyboard());
+    }
 
     const adminOk = await isAnyAdmin(ctx.from?.id);
     if (!adminOk) return next();
@@ -299,7 +499,7 @@ module.exports = function registerAdminOrders(bot) {
 
         await ctx.reply(
           `✅ Order \`${orderId.slice(-8).toUpperCase()}\` completed. Tracking receipt sent to customer.`,
-          { parse_mode: 'Markdown' }
+          { parse_mode: 'Markdown', ...adminOrdersKeyboard() }
         );
 
       } else if (type === 'cancel_refund') {
@@ -384,10 +584,7 @@ module.exports = function registerAdminOrders(bot) {
     if (!orders.length) return ctx.reply('✅ No pending orders right now.');
 
     for (const order of orders) {
-      await ctx.reply(`🟡 *Pending Order*\n\n${orderSummaryText(order)}`, {
-        parse_mode: 'Markdown',
-        ...adminOrderActionKeyboard(order._id.toString()),
-      });
+      await showOrderCard(ctx, order);
     }
   });
 

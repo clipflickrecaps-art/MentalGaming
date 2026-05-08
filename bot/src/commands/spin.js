@@ -11,13 +11,18 @@ module.exports = function registerSpin(bot) {
     await ctx.scene.enter('spin_wheel_scene');
   });
 
-  bot.hears('🎰 Spin Wheel', checkRestrictions('spin'), async (ctx) => {
+  bot.hears(['🎰 Spin Wheel', '🎰 Spin Again'], checkRestrictions('spin'), async (ctx) => {
     await ctx.scene.enter('spin_wheel_scene');
   });
 
-  // Inline button handler for main menu spin button
+  bot.hears('🔙 Done', async (ctx, next) => {
+    if (!ctx.session) return next();
+    return ctx.reply('🏠 Main Menu', { reply_markup: { resize_keyboard: true, keyboard: [['🏠 Main Menu']] } });
+  });
+
+  // Fullfix14: old inline spin buttons redirect to reply-keyboard mode.
   bot.action('spin_wheel_start', checkRestrictions('spin'), async (ctx) => {
-    await ctx.answerCbQuery();
+    await ctx.answerCbQuery('UI updated. Use the reply keyboard below.').catch(() => {});
     await ctx.scene.enter('spin_wheel_scene');
   });
 

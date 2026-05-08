@@ -36,6 +36,19 @@ const productSchema = new mongoose.Schema(
     imageUrl:     { type: String, default: null },
     description:  { type: String, default: '' },
 
+    // ── Required customer info for manual delivery ─────────────────────────
+    // Admin can configure these per product. During checkout the bot asks the
+    // user for every required field and stores the answers on the order.
+    requiredFields: {
+      type: [{
+        key:      { type: String, required: true, trim: true },
+        label:    { type: String, required: true, trim: true },
+        required: { type: Boolean, default: true },
+        hint:     { type: String, default: '' },
+      }],
+      default: [],
+    },
+
     // ── Flash Sale ───────────────────────────────────────────────────────────
     flashSalePrice:    { type: Number,  default: null },
     flashSaleStart:    { type: Date,    default: null },

@@ -88,6 +88,18 @@ module.exports = function registerSupport(bot) {
   });
 
   // ── /skip command — skip screenshot upload ────────────────────────────────
+  bot.hears('⏭ Skip Screenshot', async (ctx) => {
+    if (!ctx.session?.awaitingTicketScreenshot) return;
+    ctx.session.awaitingTicketScreenshot = false;
+    const supportScene = require('../scenes/supportScene');
+    return supportScene.createTicketFromSession(ctx, []);
+  });
+
+  bot.hears('📎 Send Screenshot', async (ctx) => {
+    if (!ctx.session?.awaitingTicketScreenshot) return;
+    return ctx.reply('📸 Screenshot ကို photo အနေနဲ့ပို့ပါ။ မလိုရင် ⏭ Skip Screenshot နှိပ်ပါ။');
+  });
+
   bot.command('skip', async (ctx) => {
     if (!ctx.session?.awaitingTicketScreenshot) return;
     ctx.session.awaitingTicketScreenshot = false;

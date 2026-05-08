@@ -40,6 +40,20 @@ const promoSchema = new mongoose.Schema(
       default: 0,
       comment: 'Minimum order total to use this promo',
     },
+
+    // Fullfix10 coupon restrictions
+    applicableProductCodes: [{ type: String, trim: true }],
+    applicableProductIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Product' }],
+    applicableFolders: [{ type: String, trim: true }],
+    applicableCategories: [{ type: String, trim: true }],
+    paymentMethods: [{ type: String, trim: true }],
+    maxDiscountAmount: { type: Number, default: null },
+    perUserLimit: { type: Number, default: 1 },
+    newUserOnly: { type: Boolean, default: false },
+    allowedTiers: [{ type: String, trim: true }],
+    stackable: { type: Boolean, default: false },
+    source: { type: String, default: 'manual' },
+
     usedBy: [
       {
         userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
@@ -73,7 +87,8 @@ promoSchema.methods.isValid = function () {
 };
 
 promoSchema.methods.hasUserUsed = function (userId) {
-  return this.usedBy.some((u) => u.userId?.toString() === userId?.toString());
+  const used = this.usedBy.filter((u) => u.userId?.toString() === userId?.toString()).length;
+  return used >= (this.perUserLimit || 1);
 };
 
 module.exports = mongoose.model('Promo', promoSchema);

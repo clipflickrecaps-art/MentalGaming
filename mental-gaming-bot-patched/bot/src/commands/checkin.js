@@ -89,7 +89,7 @@ module.exports = function registerCheckIn(bot) {
     await handleCheckIn(ctx);
   });
 
-  bot.hears(['🗓 Check In', '✅ Check In', 'checkin'], checkRestrictions('checkin'), async (ctx) => {
+  bot.hears(['🗓 Check In', '✅ Check In', 'checkin', '🗓 နေ့စဉ် Check-In'], checkRestrictions('checkin'), async (ctx) => {
     await handleCheckIn(ctx);
   });
 
@@ -112,11 +112,7 @@ module.exports = function registerCheckIn(bot) {
         `_Tomorrow's reward: *+${status.nextReward.coins} MC*${status.nextReward.ks > 0 ? ` + ${status.nextReward.ks} KS` : ''}_`,
         {
           parse_mode: 'Markdown',
-          ...Markup.inlineKeyboard([
-            [Markup.button.callback('📅 Calendar',    'ci_calendar')],
-            [Markup.button.callback('📊 My Streak',   'ci_streak')],
-            [Markup.button.callback('🔙 Main Menu', 'nav:go:main')],
-          ]),
+          ...Markup.keyboard([['📅 Calendar', '🔥 My Streak'], ['🏠 Main Menu']]).resize(),
         }
       );
       return;
@@ -136,14 +132,9 @@ module.exports = function registerCheckIn(bot) {
       await ctx.telegram.editMessageText(
         msgRef.chatId, msgRef.messageId, undefined,
         buildResultText(result),
-        {
-          parse_mode: 'Markdown',
-          ...Markup.inlineKeyboard([
-            [Markup.button.callback('📅 View Calendar', 'ci_calendar'), Markup.button.callback('📊 Full Streak', 'ci_streak')],
-            [Markup.button.callback('🔙 Main Menu', 'nav:go:main')],
-          ]),
-        }
+        { parse_mode: 'Markdown' }
       ).catch(() => {});
+      await ctx.reply('Choose next action:', Markup.keyboard([['📅 Calendar', '🔥 My Streak'], ['🏠 Main Menu']]).resize());
     } catch (err) {
       if (err.message === 'already_checked_in') {
         await ctx.telegram.editMessageText(
@@ -160,9 +151,8 @@ module.exports = function registerCheckIn(bot) {
   }
 
   // ── /streak ─────────────────────────────────────────────────────────────────
-  bot.command('streak', async (ctx) => {
-    await showStreak(ctx);
-  });
+  bot.command('streak', async (ctx) => { await showStreak(ctx); });
+  bot.hears(['🔥 My Streak', '🔥 Streak ကြည့်ရန်'], async (ctx) => { await showStreak(ctx); });
 
   async function showStreak(ctx) {
     const user = await User.findByTelegramId(ctx.from.id);
@@ -194,20 +184,16 @@ module.exports = function registerCheckIn(bot) {
 
     await ctx.reply(text, {
       parse_mode: 'Markdown',
-      ...Markup.inlineKeyboard([
-        checkedToday
-          ? [Markup.button.callback('✅ Checked In Today', 'ci_noop')]
-          : [Markup.button.callback('🗓 Check In Now', 'ci_do')],
-        [Markup.button.callback('📅 View Calendar', 'ci_calendar')],
-        [Markup.button.callback('🔙 Main Menu', 'nav:go:main')],
-      ]),
+      ...Markup.keyboard([
+        checkedToday ? ['✅ Checked In Today'] : ['🗓 Check In'],
+        ['📅 Calendar', '🏠 Main Menu'],
+      ]).resize(),
     });
   }
 
   // ── /calendar ───────────────────────────────────────────────────────────────
-  bot.command('calendar', async (ctx) => {
-    await showCalendar(ctx);
-  });
+  bot.command('calendar', async (ctx) => { await showCalendar(ctx); });
+  bot.hears('📅 Calendar', async (ctx) => { await showCalendar(ctx); });
 
   async function showCalendar(ctx, year = null, month = null) {
     const today = getMSTToday();
@@ -230,75 +216,14 @@ module.exports = function registerCheckIn(bot) {
       `✅ Checked in  📍 Today  🔲 Missed`,
       {
         parse_mode: 'Markdown',
-        ...Markup.inlineKeyboard([
-          [
-            Markup.button.callback('◀', `ci_cal:${prevMonth.y}:${prevMonth.m}`),
-            Markup.button.callback(`${['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m]} ${y}`, 'ci_noop'),
-            Markup.button.callback('▶', `ci_cal:${nextMonth.y}:${nextMonth.m}`),
-          ],
-          [Markup.button.callback('📊 My Streak', 'ci_streak')],
-          [Markup.button.callback('🔙 Main Menu', 'nav:go:main')],
-        ]),
+        ...Markup.keyboard([['🔥 My Streak', '🗓 Check In'], ['🏠 Main Menu']]).resize(),
       }
     );
   }
 
-  // ── Actions ──────────────────────────────────────────────────────────────────
-  bot.action('ci_do', async (ctx) => {
-    await ctx.answerCbQuery('Checking in!');
-    await ctx.editMessageReplyMarkup({ inline_keyboard: [] }).catch(() => {});
-    await handleCheckIn(ctx);
+  // ── Old inline actions disabled in Fullfix14 ───────────────────────────────
+  bot.action(/^ci_/, async (ctx) => {
+    await ctx.answerCbQuery('UI updated. Please use the reply keyboard below.').catch(() => {});
+    return ctx.reply('✅ Check-In UI updated. Use the buttons below.', Markup.keyboard([['🗓 Check In', '📅 Calendar'], ['🔥 My Streak', '🏠 Main Menu']]).resize());
   });
-
-  bot.action('ci_calendar', async (ctx) => {
-    await ctx.answerCbQuery();
-    await ctx.editMessageReplyMarkup({ inline_keyboard: [] }).catch(() => {});
-    await showCalendar(ctx);
-  });
-
-  bot.action('ci_streak', async (ctx) => {
-    await ctx.answerCbQuery();
-    await ctx.editMessageReplyMarkup({ inline_keyboard: [] }).catch(() => {});
-    await showStreak(ctx);
-  });
-
-  bot.action(/^ci_cal:(\d+):(\d+)$/, async (ctx) => {
-    await ctx.answerCbQuery();
-    const year  = parseInt(ctx.match[1]);
-    const month = parseInt(ctx.match[2]);
-
-    const today = getMSTToday();
-    const [y, m] = (year && month)
-      ? [year, month]
-      : [parseInt(today.slice(0, 4)), parseInt(today.slice(5, 7))];
-
-    const data     = await getMonthCalendar(ctx.from.id, y, m);
-    if (!data) return;
-    const calendar = buildCalendar(y, m, data.checkedDays, data.todayDay, data.todayMonth, data.todayYear);
-    const count    = data.checkedDays.size;
-
-    const prevMonth = m === 1 ? { y: y - 1, m: 12 } : { y, m: m - 1 };
-    const nextMonth = m === 12 ? { y: y + 1, m: 1  } : { y, m: m + 1 };
-    const MONTHS = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-
-    await ctx.editMessageText(
-      `${calendar}\n\n` +
-      `✅ Checked in *${count}* day${count !== 1 ? 's' : ''} this month\n\n` +
-      `✅ Checked in  📍 Today  🔲 Missed`,
-      {
-        parse_mode: 'Markdown',
-        ...Markup.inlineKeyboard([
-          [
-            Markup.button.callback('◀', `ci_cal:${prevMonth.y}:${prevMonth.m}`),
-            Markup.button.callback(`${MONTHS[m]} ${y}`, 'ci_noop'),
-            Markup.button.callback('▶', `ci_cal:${nextMonth.y}:${nextMonth.m}`),
-          ],
-          [Markup.button.callback('📊 My Streak', 'ci_streak')],
-          [Markup.button.callback('🔙 Main Menu', 'nav:go:main')],
-        ]),
-      }
-    ).catch(() => {});
-  });
-
-  bot.action('ci_noop', async (ctx) => ctx.answerCbQuery());
 };

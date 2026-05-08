@@ -48,7 +48,60 @@ bot.use(maintenanceCheck());   // ← maintenance/holiday gate (after session, b
 bot.use(stage.middleware());
 bot.use(attachUser());
 
+// Fullfix14: normalize Myanmar reply-keyboard labels to existing command text handlers.
+bot.use(async (ctx, next) => {
+  if (ctx.message?.text) {
+    const map = {
+      '🛒 စျေးဝယ်မယ်': '🛒 Shop',
+      '📦 ကျွန်ုပ် Order များ': '📦 My Orders',
+      '💰 ပိုက်ဆံအိတ်': '💰 Wallet',
+      '👤 ကိုယ်ရေးအချက်အလက်': '👤 My Profile',
+      '🗓 နေ့စဉ် Check-In': '🗓 Check In',
+      '🔥 Streak ကြည့်ရန်': '🔥 My Streak',
+      '📖 သိမ်းထားသော ID များ': '📖 Saved IDs',
+      '💬 အကူအညီ': '💬 Support',
+      '📚 မေးလေ့ရှိသောမေးခွန်းများ': '📚 FAQ',
+      '⚙️ Setting': '⚙️ Settings',
+    };
+    if (map[ctx.message.text]) ctx.message.text = map[ctx.message.text];
+  }
+  return next();
+});
+
 navigationMiddleware(bot);
+
+// Fullfix14: block old inline UI routes for both user and admin.
+// Order checkout callbacks are still allowed until the shop flow is fully reply-keyboard migrated.
+bot.use(async (ctx, next) => {
+  if (!ctx.callbackQuery) return next();
+  const data = String(ctx.callbackQuery.data || '');
+  const fromId = Number(ctx.from?.id || 0);
+  const ownerId = Number(config.bot.adminId || 0);
+  const isAdmin = fromId === ownerId;
+  const oldUiLike = /^(nav:|admin|gc_|gc:|ap_|ap:|cat_|cat:|pay_|payment_|channel_|coupon_|autopost_|export_|analytics|health_|tpl_|ticket_|admin_|spin_|ci_)/i.test(data);
+  if (!oldUiLike) return next();
+  try { await ctx.answerCbQuery('UI updated. Please use the reply keyboard below.'); } catch (_) {}
+  if (isAdmin) {
+    return ctx.reply('🔧 *Admin Panel — Reply Keyboard Mode*\n\nInline buttons are disabled. Please use the keyboard buttons below.', {
+      parse_mode: 'Markdown',
+      reply_markup: { resize_keyboard: true, keyboard: [
+        ['📊 Dashboard', '📦 Manage Orders'],
+        ['🛍️ Manage Products', '👥 Manage Users'],
+        ['🎰 Spin Rewards', '💳 Payments'],
+        ['📢 Channel Settings', '🗓 Check-In'],
+        ['🎟 Coupon Manager', '🗓 Auto Channel Posts'],
+        ['📁 Categories', '🏠 Admin Menu'],
+      ]},
+    });
+  }
+  return ctx.reply('⚠️ UI updated. Please use the keyboard buttons below 👇', {
+    reply_markup: { resize_keyboard: true, keyboard: [
+      ['🛒 Shop', '📦 My Orders'], ['💰 Wallet', '👤 My Profile'], ['🗓 Check In', '🎰 Spin Wheel'],
+      ['📢 Channels', '💬 Support'], ['📚 FAQ', '⚙️ Settings'],
+    ]},
+  });
+});
+
 
 function loadCommands(bot) {
   const commandsDir = path.join(__dirname, 'commands');
@@ -68,6 +121,7 @@ function loadCommands(bot) {
     'support.js',
     'profile.js',
     'settings.js',
+    'channels.js',
     'dashboard.js',
     'adminOrders.js',
     'userManagement.js',
@@ -236,6 +290,10 @@ async function bootstrap() {
   const { startFlashSaleWatcher } = require('./services/FlashSaleService');
   startFlashSaleWatcher(bot.telegram);
   console.log('[Bot] ✅ Flash sale watcher started');
+
+  // Fullfix10: channel auto posting watcher
+  const { startChannelAutoPoster } = require('./services/ChannelAutoPostService');
+  startChannelAutoPoster(bot.telegram);
 
   // Feedback watcher — every 60 min
   const { startFeedbackWatcher } = require('./services/FeedbackService');

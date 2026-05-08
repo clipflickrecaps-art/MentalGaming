@@ -55,10 +55,18 @@ const orderSchema = new mongoose.Schema(
       default: 'DirectTopup',
     },
 
-    // ── Game ID (for DirectTopup) ─────────────────────────────────────────
+    // ── Customer delivery info (for DirectTopup/manual products) ─────────
     gameId: { type: String, default: null },
     zoneId: { type: String, default: null },
     gameName: { type: String, default: null },
+    requiredInfo: {
+      type: [{
+        key:   { type: String, trim: true },
+        label: { type: String, trim: true },
+        value: { type: String, trim: true },
+      }],
+      default: [],
+    },
 
     transactionId: { type: String, default: null },
     deliveredData: { type: String, default: null },
