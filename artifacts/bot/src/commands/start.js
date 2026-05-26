@@ -136,27 +136,19 @@ module.exports = function registerStart(bot) {
       return ctx.scene.enter('onboarding');
     }
 
-    // ── Admin — single welcome message + inline admin panel ──────────────────
-    const isAdmin = Number(ctx.from.id) === Number(config.bot.adminId);
-    if (isAdmin) {
-      await ctx.reply(
-        `🔧 *Admin Panel* — Mental Gaming Store\n👋 Welcome back, *${name}*!`,
-        { parse_mode: 'Markdown', ...Markup.removeKeyboard() }
-      );
-      return Nav.navigate(ctx, 'admin_main', false);
+    // ── Send any deep-link notice ONLY (no duplicate welcome) ────────────────
+    const notice = (extraNote || '') + (referralNotice || '');
+    if (notice.trim()) {
+      await ctx.reply(notice, { parse_mode: 'Markdown', ...Markup.removeKeyboard() });
+    } else {
+      // Clear any stale reply keyboard from older builds
+      await ctx.reply('🔄', Markup.removeKeyboard())
+        .then((m) => ctx.deleteMessage(m.message_id).catch(() => {}))
+        .catch(() => {});
     }
 
-    // ── Returning user — seasonal welcome + inline main menu ─────────────────
-    const season = await StyleService.getActiveSeason();
-    const header = StyleService.buildWelcomeHeader(name, tier, season);
-
-    await ctx.reply(
-      header +
-      (extraNote ? `\n${extraNote}` : '') +
-      (referralNotice ? `\n${referralNotice}` : ''),
-      { parse_mode: 'Markdown', ...Markup.removeKeyboard() }
-    );
-
-    await Nav.navigate(ctx, 'main', false);
+    // ── Single panel: admin gets admin_main, everyone else gets main ─────────
+    const isAdmin = Number(ctx.from.id) === Number(config.bot.adminId);
+    return Nav.navigate(ctx, isAdmin ? 'admin_main' : 'main', false);
   });
 };
