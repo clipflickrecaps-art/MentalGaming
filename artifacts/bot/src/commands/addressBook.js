@@ -13,7 +13,7 @@ const User = require('../models/User');
 
 module.exports = function registerAddressBook(bot) {
 
-  bot.command('myids', async (ctx) => {
+  const myIdsHandler = async (ctx) => {
     const entries = await getEntries(ctx.from.id);
     if (!entries.length) {
       return ctx.reply(
@@ -46,7 +46,10 @@ module.exports = function registerAddressBook(bot) {
         ]),
       }
     );
-  });
+  };
+
+  bot.command('myids', myIdsHandler);
+  bot.hears('📖 My Game IDs', myIdsHandler);
 
   // ── /saveid <Game> <GameID> [ZoneID] ["Nickname"] ──────────────────────────
   bot.command('saveid', async (ctx) => {

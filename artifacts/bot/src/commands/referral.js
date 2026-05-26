@@ -101,7 +101,7 @@ function buildShareText(stats) {
 
 module.exports = function registerReferral(bot) {
 
-  bot.command('referral', async (ctx) => {
+  const referralHandler = async (ctx) => {
     try {
       const stats = await getStats(ctx.from.id);
 
@@ -159,7 +159,10 @@ module.exports = function registerReferral(bot) {
     } catch (err) {
       await ctx.reply(`❌ ${err.message}`);
     }
-  });
+  };
+
+  bot.command('referral', referralHandler);
+  bot.hears('👥 Referral', referralHandler);
 
   // ── /reflink — quick shareable invite ────────────────────────────────────────
 

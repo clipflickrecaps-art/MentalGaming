@@ -4,6 +4,9 @@ function mainMenuKeyboard() {
   return Markup.keyboard([
     ['🛒 Shop', '📦 My Orders'],
     ['💰 Wallet', '👤 My Profile'],
+    ['🗓 Check In', '🎰 Spin Wheel'],
+    ['🎟 Promo', '👥 Referral'],
+    ['📖 My Game IDs', '❓ FAQ'],
     ['💬 Support', '⚙️ Settings'],
   ]).resize();
 }

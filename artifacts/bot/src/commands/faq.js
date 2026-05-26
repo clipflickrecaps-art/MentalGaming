@@ -62,14 +62,7 @@ module.exports = function registerFAQ(bot) {
 
   // ── /faq [query] ─────────────────────────────────────────────────────────────
 
-  bot.command('faq', async (ctx) => {
-    const args = ctx.message.text.split(/\s+/).slice(1).join(' ').trim();
-
-    if (args) {
-      // Direct search from command
-      return showSearchResults(ctx, args);
-    }
-
+  const faqMenuHandler = async (ctx) => {
     // Show category browser
     await ctx.reply(
       `📚 *FAQ & Help Center*\n\n` +
@@ -94,7 +87,15 @@ module.exports = function registerFAQ(bot) {
         ]),
       }
     );
+  };
+
+  bot.command('faq', async (ctx) => {
+    const args = ctx.message.text.split(/\s+/).slice(1).join(' ').trim();
+    if (args) return showSearchResults(ctx, args);
+    return faqMenuHandler(ctx);
   });
+
+  bot.hears('❓ FAQ', faqMenuHandler);
 
   // ── Category browse ───────────────────────────────────────────────────────────
 
