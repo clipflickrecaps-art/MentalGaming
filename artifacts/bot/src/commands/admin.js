@@ -260,62 +260,6 @@ module.exports = function registerAdmin(bot) {
     );
   });
 
-  // ── Keep hears handlers for backward compatibility ─────────────────────────
-  bot.hears('💱 Manage Rates',    adminOnly(), (ctx) => ctx.scene.enter('rate_manager'));
-  bot.hears('📢 Broadcast',       adminOnly(), (ctx) => ctx.scene.enter('broadcast_scene'));
-  bot.hears('👥 Manage Users',    adminOnly(), async (ctx) => {
-    await ctx.reply(`👥 *User Management*\n\nChoose an action:`, {
-      parse_mode: 'Markdown',
-      ...Markup.inlineKeyboard([
-        [Markup.button.callback('📋 All Users',    'users_page:1')],
-        [Markup.button.callback('🚫 Banned Users', 'users_banned')],
-        [Markup.button.callback('⚠️ Warned Users', 'users_warned')],
-        [Markup.button.callback('📊 User Stats',   'users_stats')],
-      ]),
-    });
-  });
-  bot.hears('📦 Manage Orders', adminOnly(), async (ctx) => {
-    const pending    = await Order.countDocuments({ status: 'Pending' });
-    const processing = await Order.countDocuments({ status: 'Processing' });
-    await ctx.reply(
-      `📦 *Order Management*\n\n🟡 Pending: *${pending}*\n🔵 Processing: *${processing}*`,
-      {
-        parse_mode: 'Markdown',
-        ...Markup.inlineKeyboard([
-          [Markup.button.callback('🟡 View Pending', 'admin_pending_orders')],
-          [Markup.button.callback('📋 All Orders',   'admin_all_orders')],
-        ]),
-      }
-    );
-  });
-  bot.hears('🛍️ Manage Products', adminOnly(), async (ctx) => {
-    const [total, active] = await Promise.all([Product.countDocuments({}), Product.countDocuments({ isActive: true })]);
-    await ctx.reply(`🛍️ *Product Management*\n\n✅ Active: *${active}*\n🔴 Inactive: *${total - active}*\n📦 Total: *${total}*`, {
-      parse_mode: 'Markdown',
-      ...Markup.inlineKeyboard([
-        [Markup.button.callback('📋 List Products', 'pm_list_products')],
-        [Markup.button.callback('➕ Add Product',   'admin_product_add')],
-        [Markup.button.callback('💱 Update Rates',  'open_rate_manager')],
-      ]),
-    });
-  });
-  bot.hears('📋 Audit Logs', adminOnly(), async (ctx) => {
-    const logs = await AuditLog.find().sort({ createdAt: -1 }).limit(10);
-    if (!logs.length) return ctx.reply('📋 No audit log entries yet.');
-    const lines = logs.map((l, i) => {
-      const ts = new Date(l.createdAt).toLocaleString('en-GB', { timeZone: 'Asia/Rangoon' });
-      const target = l.targetId ? ` → \`${l.targetId}\`` : '';
-      return `${i + 1}\\. \`${l.action}\`${target}\n   _${ts} MMT_`;
-    });
-    await ctx.reply(`📋 *Recent Audit Logs*\n\n${lines.join('\n\n')}`, {
-      parse_mode: 'Markdown',
-      ...Markup.inlineKeyboard([[Markup.button.callback('🔄 Refresh', 'audit_refresh')]]),
-    });
-  });
-  bot.hears('🔙 Back to Main', adminOnly(), async (ctx) => {
-    await Nav.navigate(ctx, 'main', false);
-  });
-
   // ── User management actions ────────────────────────────────────────────────
   bot.action('users_banned', adminOnly(), async (ctx) => {
     await ctx.answerCbQuery();
