@@ -171,8 +171,12 @@ module.exports = function registerAnalytics(bot) {
         ]),
       });
     } catch (err) {
-      await ctx.telegram.editMessageText(waitMsg.chat.id, waitMsg.message_id, undefined,
-        `❌ Analytics error: ${err.message}`);
+      console.error('[Analytics] /analytics failed:', err);
+      await ctx.telegram
+        .editMessageText(waitMsg.chat.id, waitMsg.message_id, undefined, `❌ Analytics error: ${err.message}`)
+        .catch(async () => {
+          await ctx.reply(`❌ Analytics error: ${err.message}`).catch(() => {});
+        });
     }
   });
 
