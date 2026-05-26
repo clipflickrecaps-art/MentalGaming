@@ -101,23 +101,35 @@ module.exports = function registerAdmin(bot) {
 
   // 👥 Manage Users → first page of users
   bot.hears('👥 Manage Users', adminOnly(), async (ctx) => {
-    const { users, total, totalPages } = await listUsers({ page: 1, limit: 10 });
-    if (!users.length) return ctx.reply('No users yet.');
+    try {
+      const { users, total, totalPages } = await listUsers({ page: 1, limit: 10 });
+      if (!users.length) return ctx.reply('No users yet.');
 
-    const lines = users.map((u, i) =>
-      `${i + 1}. \`${u.telegramId}\` ${u.username ? `@${u.username}` : '—'} — ${u.membershipTier} ${u.isBlocked ? '🚫' : '🟢'}`
-    );
-    await ctx.reply(
-      `👥 *Users (${total} total)*\n\n${lines.join('\n')}\n\n` +
-      `_Search: /users <name|id>_\n` +
-      `_Actions: /ban /unban /warn /restrict /adjustbal /userinfo_`,
-      {
-        parse_mode: 'Markdown',
-        ...(totalPages > 1 ? Markup.inlineKeyboard([
-          [Markup.button.callback(`Page 1/${totalPages} ›`, 'users_page:2')],
-        ]) : {}),
-      }
-    );
+      // Escape Markdown special chars so usernames with _ * ` [ don't break parsing
+      const esc = (s) => String(s || '').replace(/([_*`\[\]()~>#+=|{}.!\\-])/g, '\\$1');
+
+      const lines = users.map((u, i) => {
+        const handle = u.username ? `@${esc(u.username)}` : '—';
+        const tier   = esc(u.membershipTier || 'Silver');
+        return `${i + 1}. \`${u.telegramId}\` ${handle} — ${tier} ${u.isBlocked ? '🚫' : '🟢'}`;
+      });
+
+      await ctx.reply(
+        `👥 *Users (${total} total)*\n\n${lines.join('\n')}\n\n` +
+        `Search: /users <name|id>\n` +
+        `Actions: /ban /unban /warn /restrict /adjustbal /userinfo`,
+        {
+          parse_mode: 'Markdown',
+          ...(totalPages > 1 ? Markup.inlineKeyboard([
+            [Markup.button.callback(`Page 1/${totalPages} ›`, 'users_page:2')],
+          ]) : {}),
+        }
+      );
+    } catch (err) {
+      console.error('[Admin] Manage Users failed:', err);
+      // Fallback: plain text without parse_mode in case escaping still misses something
+      await ctx.reply(`❌ Manage Users error: ${err.message}\n\nUse /users <name|id> to search.`);
+    }
   });
 
   // 💱 Manage Rates → show current rates + open rate manager
