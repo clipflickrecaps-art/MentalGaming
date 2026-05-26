@@ -56,10 +56,11 @@ module.exports = function registerAddressBook(bot) {
 
   // ── /saveid <Game> <GameID> [ZoneID] ["Nickname"] ──────────────────────────
   bot.command('saveid', async (ctx) => {
+    const { t } = require('../utils/i18n');
     const text = ctx.message.text.slice('/saveid'.length).trim();
     if (!text) {
       return ctx.reply(
-        `📖 *Save Game ID*\n\nFormat:\n\`/saveid GameName GameID [ZoneID] [Nickname]\`\n\nExamples:\n• \`/saveid MobileLegends 123456 9001 MyMain\`\n• \`/saveid FreeFire 987654321 Main\``,
+        `${t(ctx, 'gameids.save_title')}\n\n${t(ctx, 'gameids.save_format')}`,
         { parse_mode: 'Markdown' }
       );
     }
@@ -67,9 +68,7 @@ module.exports = function registerAddressBook(bot) {
     const parts = text.match(/[^\s"']+|"([^"]*)"|\`([^`]*)\`/g)?.map((p) => p.replace(/^["'`]|["'`]$/g, '')) || [];
 
     if (parts.length < 2) {
-      return ctx.reply('❌ Minimum: /saveid GameName GameID\n\nExample: `/saveid FreeFire 987654`', {
-        parse_mode: 'Markdown',
-      });
+      return ctx.reply(t(ctx, 'gameids.min_args'), { parse_mode: 'Markdown' });
     }
 
     const [gameName, gameId, ...rest] = parts;
@@ -80,12 +79,12 @@ module.exports = function registerAddressBook(bot) {
     try {
       const entry = await saveEntry(ctx.from.id, { gameName, gameId, zoneId, nickname });
       await ctx.reply(
-        `✅ *Game ID Saved!*\n\n` +
-        `🎮 Game: *${entry.gameName}*\n` +
-        `🆔 ID: \`${entry.gameId}\`` +
-        (entry.zoneId ? `\n🗺 Zone: \`${entry.zoneId}\`` : '') +
-        (entry.nickname !== entry.gameId ? `\n📝 Label: *${entry.nickname}*` : '') +
-        `\n${entry.isDefault ? '\n⭐ Set as default for this game' : ''}`,
+        `${t(ctx, 'gameids.saved')}\n\n` +
+        `🎮 ${t(ctx, 'gameids.game')}: *${entry.gameName}*\n` +
+        `🆔 ${t(ctx, 'gameids.id')}: \`${entry.gameId}\`` +
+        (entry.zoneId ? `\n🗺 ${t(ctx, 'gameids.zone')}: \`${entry.zoneId}\`` : '') +
+        (entry.nickname !== entry.gameId ? `\n📝 ${t(ctx, 'gameids.label')}: *${entry.nickname}*` : '') +
+        `\n${entry.isDefault ? `\n${t(ctx, 'gameids.default_set')}` : ''}`,
         { parse_mode: 'Markdown' }
       );
     } catch (err) {

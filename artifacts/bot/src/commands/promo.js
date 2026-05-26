@@ -25,10 +25,11 @@ module.exports = function registerPromo(bot) {
 
   // ── User: check a promo code ───────────────────────────────────────────────
   bot.command('promo', async (ctx) => {
+    const { t } = require('../utils/i18n');
     const args = ctx.message.text.split(/\s+/).slice(1);
     if (!args.length) {
       return ctx.reply(
-        `🎟 *Promo Codes*\n\nUse: \`/promo YOUR_CODE\`\n\nPromo codes are applied during checkout in the /shop.`,
+        `${t(ctx, 'promo.title')}\n\n${t(ctx, 'promo.usage_short')}`,
         { parse_mode: 'Markdown' }
       );
     }
@@ -41,17 +42,18 @@ module.exports = function registerPromo(bot) {
     }
 
     const p = result.promo;
+    const off = t(ctx, 'promo.off');
     const discountDesc = p.discountType === 'Flat'
-      ? `${price(p.value)} off`
-      : `${p.value}% off`;
+      ? `${price(p.value)} ${off}`
+      : `${p.value}% ${off}`;
 
     await ctx.reply(
-      `✅ *Promo Code Valid!*\n\n` +
-      `🎟 Code: \`${p.code}\`\n` +
-      `🏷 Discount: *${discountDesc}*\n` +
-      (p.minOrderAmount > 0 ? `📋 Min Order: *${price(p.minOrderAmount)}*\n` : '') +
-      (p.expiryDate ? `📅 Expires: ${new Date(p.expiryDate).toLocaleDateString('en-GB')}\n` : '') +
-      `\n_Apply this code at checkout!_`,
+      `${t(ctx, 'promo.code_valid')}\n\n` +
+      `🎟 ${t(ctx, 'promo.code')}: \`${p.code}\`\n` +
+      `🏷 ${t(ctx, 'promo.discount')}: *${discountDesc}*\n` +
+      (p.minOrderAmount > 0 ? `📋 ${t(ctx, 'promo.min_order')}: *${price(p.minOrderAmount)}*\n` : '') +
+      (p.expiryDate ? `📅 ${t(ctx, 'promo.expires')}: ${new Date(p.expiryDate).toLocaleDateString('en-GB')}\n` : '') +
+      `\n${t(ctx, 'promo.apply_hint')}`,
       { parse_mode: 'Markdown' }
     );
   });

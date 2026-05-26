@@ -167,8 +167,9 @@ module.exports = function registerCheckIn(bot) {
   });
 
   async function showStreak(ctx) {
+    const { t } = require('../utils/i18n');
     const user = await User.findByTelegramId(ctx.from.id);
-    if (!user) return ctx.reply('❌ Please /start first.');
+    if (!user) return ctx.reply(t(ctx, 'common.start_first'));
 
     const status   = await getCheckInStatus(ctx.from.id);
     const streak   = user.checkInStreak || 0;
@@ -176,31 +177,34 @@ module.exports = function registerCheckIn(bot) {
     const total    = user.totalCheckIns || 0;
     const bar      = streakBar(streak);
 
+    const dayWord = t(ctx, streak === 1 ? 'common.day' : 'common.days');
+    const daysWord = t(ctx, 'common.days');
+
     const nextMilestone = MILESTONES.find((m) => m.streak > streak);
     const milestoneText = nextMilestone
-      ? `\n🎯 Next milestone: *Day ${nextMilestone.streak}* — +${nextMilestone.coins} MC + ${nextMilestone.ks.toLocaleString()} KS`
-      : `\n🏆 All milestones achieved!`;
+      ? `\n🎯 ${t(ctx, 'streak.next_milestone')}: *Day ${nextMilestone.streak}* — +${nextMilestone.coins} MC + ${nextMilestone.ks.toLocaleString()} KS`
+      : `\n${t(ctx, 'streak.all_milestones')}`;
 
     const today = getMSTToday();
     const checkedToday = user.lastCheckInDate === today;
 
     const text =
-      `📊 *Your Check-In Stats*\n\n` +
-      `🔥 Current Streak: *${streak} day${streak !== 1 ? 's' : ''}*\n` +
+      `${t(ctx, 'streak.title')}\n\n` +
+      `🔥 ${t(ctx, 'streak.current')}: *${streak} ${dayWord}*\n` +
       `${bar}\n\n` +
-      `🏆 Longest Streak: *${longest} days*\n` +
-      `📅 Total Check-Ins: *${total}*\n` +
-      `${checkedToday ? '✅ Already checked in today' : '⏰ Not checked in yet today'}\n` +
+      `🏆 ${t(ctx, 'streak.longest')}: *${longest} ${daysWord}*\n` +
+      `📅 ${t(ctx, 'streak.total')}: *${total}*\n` +
+      `${checkedToday ? t(ctx, 'streak.checked_today') : t(ctx, 'streak.not_yet_today')}\n` +
       milestoneText +
-      `\n\n*7-Day Reward Preview:*\n${getRewardPreview(streak)}`;
+      `\n\n${t(ctx, 'streak.reward_preview')}\n${getRewardPreview(streak)}`;
 
     await ctx.reply(text, {
       parse_mode: 'Markdown',
       ...Markup.inlineKeyboard([
         checkedToday
-          ? [Markup.button.callback('✅ Checked In Today', 'ci_noop')]
-          : [Markup.button.callback('🗓 Check In Now', 'ci_do')],
-        [Markup.button.callback('📅 View Calendar', 'ci_calendar')],
+          ? [Markup.button.callback(t(ctx, 'streak.checked_today'), 'ci_noop')]
+          : [Markup.button.callback(t(ctx, 'streak.checkin_now'), 'ci_do')],
+        [Markup.button.callback(t(ctx, 'streak.view_calendar'), 'ci_calendar')],
       ]),
     });
   }
@@ -211,24 +215,26 @@ module.exports = function registerCheckIn(bot) {
   });
 
   async function showCalendar(ctx, year = null, month = null) {
+    const { t } = require('../utils/i18n');
     const today = getMSTToday();
     const [y, m] = (year && month)
       ? [year, month]
       : [parseInt(today.slice(0, 4)), parseInt(today.slice(5, 7))];
 
     const data = await getMonthCalendar(ctx.from.id, y, m);
-    if (!data) return ctx.reply('❌ Please /start first.');
+    if (!data) return ctx.reply(t(ctx, 'common.start_first'));
 
     const calendar = buildCalendar(y, m, data.checkedDays, data.todayDay, data.todayMonth, data.todayYear);
     const checkedCount = data.checkedDays.size;
+    const dayWord = t(ctx, checkedCount === 1 ? 'common.day' : 'common.days');
 
     const prevMonth = m === 1 ? { y: y - 1, m: 12 } : { y, m: m - 1 };
     const nextMonth = m === 12 ? { y: y + 1, m: 1  } : { y, m: m + 1 };
 
     await ctx.reply(
       `${calendar}\n\n` +
-      `✅ Checked in *${checkedCount}* day${checkedCount !== 1 ? 's' : ''} this month\n\n` +
-      `✅ Checked in  📍 Today  🔲 Missed`,
+      `✅ ${t(ctx, 'calendar.checked_in')} *${checkedCount}* ${dayWord} ${t(ctx, 'calendar.this_month')}\n\n` +
+      `${t(ctx, 'calendar.legend')}`,
       {
         parse_mode: 'Markdown',
         ...Markup.inlineKeyboard([
@@ -237,7 +243,7 @@ module.exports = function registerCheckIn(bot) {
             Markup.button.callback(`${['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m]} ${y}`, 'ci_noop'),
             Markup.button.callback('▶', `ci_cal:${nextMonth.y}:${nextMonth.m}`),
           ],
-          [Markup.button.callback('📊 My Streak', 'ci_streak')],
+          [Markup.button.callback(t(ctx, 'calendar.my_streak_btn'), 'ci_streak')],
         ]),
       }
     );

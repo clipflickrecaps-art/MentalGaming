@@ -8,7 +8,7 @@
  */
 
 const { Scenes, Markup } = require('telegraf');
-const { spin, canFreeSpinToday, nextFreeSpinIn, PRIZE_POOL, SPIN_COST_COINS, WHEEL_FRAMES } = require('../services/GameService');
+const { spin, canFreeSpinToday, nextFreeSpinIn, getEffectivePrizePool, SPIN_COST_COINS, WHEEL_FRAMES } = require('../services/GameService');
 const { formatCountdown } = require('../services/FlashSaleService');
 const { price } = require('../utils/ui');
 const { auditLog } = require('../services/logger');
@@ -45,10 +45,8 @@ const spinWheelScene = new Scenes.WizardScene(
     const msToNext = freeSpin ? 0 : nextFreeSpinIn(user);
     const hasPaidCoins = user.balanceCoin >= SPIN_COST_COINS;
 
-    const prizeLines = PRIZE_POOL.map((p) => {
-      const pct = Math.round((p.weight / PRIZE_POOL.reduce((s, x) => s + x.weight, 0)) * 100);
-      return `${p.label}  —  ${pct}%`;
-    });
+    const pool = await getEffectivePrizePool();
+    const prizeLines = pool.map((p) => `${p.label}`);
 
     const statusLine = freeSpin
       ? `✅ Free spin available!`

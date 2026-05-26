@@ -41,6 +41,22 @@ const gameConfigSchema = new mongoose.Schema(
     spinWeightKS1000:    { type: Number, default: 3  },
     spinWeightKS5000:    { type: Number, default: 1  },
     spinWeightFreeSpin:  { type: Number, default: 1  },
+
+    // ── Custom Spin Prizes (admin-added) ─────────────────────────────────────
+    customSpinPrizes: {
+      type: [
+        new mongoose.Schema(
+          {
+            label:  { type: String, required: true },
+            type:   { type: String, enum: ['coin', 'ks', 'spin', 'none'], required: true },
+            value:  { type: Number, default: 0 },
+            weight: { type: Number, default: 1, min: 0 },
+          },
+          { _id: true, timestamps: false }
+        ),
+      ],
+      default: [],
+    },
   },
   { timestamps: true, versionKey: false }
 );

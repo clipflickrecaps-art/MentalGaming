@@ -15,6 +15,7 @@
  */
 
 const User = require('../models/User');
+const GameConfig = require('../models/GameConfig');
 const { creditKS, creditCoin, debitCoin } = require('./WalletService');
 
 const SPIN_COST_COINS = 50;
@@ -30,16 +31,46 @@ const PRIZE_POOL = [
   { id: 'free_spin',   label: '🎰 Free Spin!',      type: 'spin',  value: 1,     weight: 1  },
 ];
 
-const TOTAL_WEIGHT = PRIZE_POOL.reduce((sum, p) => sum + p.weight, 0);
+// Map GameConfig.spinWeight* → default prize id so admin weight edits take effect.
+const WEIGHT_FIELDS = {
+  thanks:    'spinWeightThanks',
+  coins_50:  'spinWeightCoins50',
+  coins_200: 'spinWeightCoins200',
+  coins_500: 'spinWeightCoins500',
+  ks_1000:   'spinWeightKS1000',
+  ks_5000:   'spinWeightKS5000',
+  free_spin: 'spinWeightFreeSpin',
+};
 
-// ── Weighted random pick ──────────────────────────────────────────────────────
-function pickPrize() {
-  let rand = Math.random() * TOTAL_WEIGHT;
-  for (const prize of PRIZE_POOL) {
+// Build the effective prize pool from defaults + admin weights + custom prizes.
+async function getEffectivePrizePool() {
+  const cfg = await GameConfig.get();
+  const pool = PRIZE_POOL.map((p) => ({
+    ...p,
+    weight: cfg[WEIGHT_FIELDS[p.id]] ?? p.weight,
+  }));
+  for (const c of (cfg.customSpinPrizes || [])) {
+    pool.push({
+      id:     `custom_${c._id}`,
+      label:  c.label,
+      type:   c.type,
+      value:  c.value || 0,
+      weight: c.weight || 0,
+    });
+  }
+  return pool;
+}
+
+// ── Weighted random pick (uses dynamic pool) ─────────────────────────────────
+async function pickPrize() {
+  const pool   = await getEffectivePrizePool();
+  const total  = pool.reduce((s, p) => s + p.weight, 0) || 1;
+  let rand = Math.random() * total;
+  for (const prize of pool) {
     rand -= prize.weight;
     if (rand <= 0) return prize;
   }
-  return PRIZE_POOL[0];
+  return pool[0];
 }
 
 // ── Check if user can spin for free ──────────────────────────────────────────
@@ -82,7 +113,7 @@ async function spin(telegramId, { usePaidSpin = false } = {}) {
   user.lastSpinAt = new Date();
   await user.save();
 
-  const prize = pickPrize();
+  const prize = await pickPrize();
 
   if (prize.type === 'ks' && prize.value > 0) {
     await creditKS(user._id, prize.value, { type: 'Bonus', note: `Spin wheel prize: ${prize.label}` });
@@ -117,6 +148,7 @@ module.exports = {
   canFreeSpinToday,
   nextFreeSpinIn,
   PRIZE_POOL,
+  getEffectivePrizePool,
   SPIN_COST_COINS,
   WHEEL_FRAMES,
 };

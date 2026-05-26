@@ -89,14 +89,88 @@ module.exports = function registerAdminGameConfig(bot) {
   bot.action('admin_spin_panel', adminOnly(), async (ctx) => {
     await ctx.answerCbQuery();
     const cfg = await GameConfig.get();
-    await ctx.reply(buildSpinText(cfg), {
+    const customCount = (cfg.customSpinPrizes || []).length;
+    const customLines = customCount > 0
+      ? '\n\n*Custom Prizes:*\n' + cfg.customSpinPrizes.map((p, i) =>
+          `  ${i + 1}. ${p.label} _(${p.type}${p.value ? ` ${p.value}` : ''}, w=${p.weight})_`
+        ).join('\n')
+      : '';
+    await ctx.reply(buildSpinText(cfg) + customLines, {
       parse_mode: 'Markdown',
       ...Markup.inlineKeyboard([
         [Markup.button.callback('✏️ Edit Prize Weights', 'gc_edit_spin_weights')],
         [Markup.button.callback('💳 Edit Spin Cost',     'gc_edit_spin_cost')],
+        [Markup.button.callback('➕ Add Custom Reward',   'gc_spin_add_start')],
+        ...(customCount > 0
+          ? [[Markup.button.callback(`🗑 Remove Custom (${customCount})`, 'gc_spin_remove_menu')]]
+          : []),
         [Markup.button.callback('🔙 Back to Admin Panel', 'nav:go:admin_main')],
       ]),
     });
+  });
+
+  // ── Add custom spin reward (multi-step wizard) ─────────────────────────────
+  bot.action('gc_spin_add_start', adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    ctx.session.gcEdit = { type: 'spinAddType' };
+    await ctx.reply(
+      `➕ *Add Custom Spin Reward*\n\nStep 1/4: Select reward *type*:`,
+      {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard([
+          [Markup.button.callback('🪙 Mental Coins', 'gc_spin_add_t:coin'),
+           Markup.button.callback('💰 KS Cash',      'gc_spin_add_t:ks')],
+          [Markup.button.callback('🎰 Free Spin',    'gc_spin_add_t:spin'),
+           Markup.button.callback('🎉 Thank You',    'gc_spin_add_t:none')],
+          [Markup.button.callback('❌ Cancel',       'gc_spin_add_cancel')],
+        ]),
+      }
+    );
+  });
+
+  bot.action(/^gc_spin_add_t:(.+)$/, adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    const type = ctx.match[1];
+    if (!['coin', 'ks', 'spin', 'none'].includes(type)) return ctx.reply('❌ Invalid type.');
+    ctx.session.gcEdit = { type: 'spinAddLabel', prizeType: type };
+    await ctx.reply(
+      `Step 2/4: Enter the *label* shown to users\n_(e.g. "🪙 1000 Coins", "💰 10,000 KS Jackpot")_`,
+      { parse_mode: 'Markdown' }
+    );
+  });
+
+  bot.action('gc_spin_add_cancel', adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery('Cancelled');
+    ctx.session.gcEdit = null;
+    await ctx.reply('❌ Add reward cancelled.');
+  });
+
+  // ── Remove custom prize ────────────────────────────────────────────────────
+  bot.action('gc_spin_remove_menu', adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    const cfg = await GameConfig.get();
+    const custom = cfg.customSpinPrizes || [];
+    if (!custom.length) return ctx.reply('No custom rewards to remove.');
+    const rows = custom.map((p) => [
+      Markup.button.callback(`🗑 ${p.label}`, `gc_spin_rm:${p._id}`),
+    ]);
+    rows.push([Markup.button.callback('🔙 Back', 'admin_spin_panel')]);
+    await ctx.reply(`🗑 *Remove Custom Reward*\n\nSelect one to remove:`, {
+      parse_mode: 'Markdown',
+      ...Markup.inlineKeyboard(rows),
+    });
+  });
+
+  bot.action(/^gc_spin_rm:(.+)$/, adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    const id = ctx.match[1];
+    const cfg = await GameConfig.get();
+    const before = (cfg.customSpinPrizes || []).length;
+    cfg.customSpinPrizes = (cfg.customSpinPrizes || []).filter((p) => String(p._id) !== id);
+    await cfg.save();
+    const removed = before - cfg.customSpinPrizes.length;
+    await auditLog(ctx.from.id, 'SPIN_CUSTOM_REMOVE', id, 'GameConfig', { removed });
+    await ctx.reply(removed > 0 ? `✅ Removed custom reward.` : '⚠️ Reward not found.');
   });
 
   // ── Coin rate edit ─────────────────────────────────────────────────────────
@@ -418,6 +492,49 @@ module.exports = function registerAdminGameConfig(bot) {
       ctx.session.gcEdit = null;
       await auditLog(ctx.from.id, 'UPDATE_SPIN_COST', null, 'GameConfig', { cost: val });
       return ctx.reply(`✅ Spin cost → *${val} Mental Coins*`, { parse_mode: 'Markdown' });
+    }
+
+    if (state.type === 'spinAddLabel') {
+      if (input.length < 2 || input.length > 60) return ctx.reply('❌ Label must be 2–60 characters.');
+      ctx.session.gcEdit = { type: 'spinAddValue', prizeType: state.prizeType, label: input };
+      if (state.prizeType === 'none' || state.prizeType === 'spin') {
+        ctx.session.gcEdit.value = state.prizeType === 'spin' ? 1 : 0;
+        ctx.session.gcEdit.type = 'spinAddWeight';
+        return ctx.reply(`Step 4/4: Enter *weight* (integer, higher = more common):`, { parse_mode: 'Markdown' });
+      }
+      const unit = state.prizeType === 'coin' ? 'Mental Coins' : 'KS';
+      return ctx.reply(`Step 3/4: Enter *${unit}* amount to award (e.g. \`1000\`):`, { parse_mode: 'Markdown' });
+    }
+
+    if (state.type === 'spinAddValue') {
+      const val = parseInt(input.replace(/,/g, ''), 10);
+      if (isNaN(val) || val <= 0) return ctx.reply('❌ Enter a positive integer.');
+      ctx.session.gcEdit = { type: 'spinAddWeight', prizeType: state.prizeType, label: state.label, value: val };
+      return ctx.reply(`Step 4/4: Enter *weight* (integer, higher = more common):`, { parse_mode: 'Markdown' });
+    }
+
+    if (state.type === 'spinAddWeight') {
+      const weight = parseInt(input, 10);
+      if (isNaN(weight) || weight < 0) return ctx.reply('❌ Enter a non-negative integer.');
+      const cfg = await GameConfig.get();
+      cfg.customSpinPrizes.push({
+        label:  state.label,
+        type:   state.prizeType,
+        value:  state.value || 0,
+        weight,
+      });
+      await cfg.save();
+      ctx.session.gcEdit = null;
+      await auditLog(ctx.from.id, 'SPIN_CUSTOM_ADD', null, 'GameConfig', {
+        label: state.label, type: state.prizeType, value: state.value || 0, weight,
+      });
+      return ctx.reply(
+        `✅ *Custom Reward Added!*\n\n` +
+        `🏷 ${state.label}\n` +
+        `📊 Type: \`${state.prizeType}\`${state.value ? ` (${state.value})` : ''}\n` +
+        `⚖️ Weight: *${weight}*`,
+        { parse_mode: 'Markdown' }
+      );
     }
 
     if (state.type === 'spinWeight') {

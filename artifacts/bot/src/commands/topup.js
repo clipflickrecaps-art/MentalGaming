@@ -247,13 +247,21 @@ module.exports = function registerTopup(bot) {
       });
 
       await auditLog(ctx.from.id, 'ADD_PAYMENT_METHOD', method._id.toString(), 'System', { name: state.name });
+      const { t } = require('../utils/i18n');
       await ctx.reply(
-        `✅ *Payment Method Added!*\n\n` +
+        `${t(ctx, 'topup.method_added')}\n\n` +
         `${emoji} *${state.name}*\n` +
         `👤 ${state.accountName}\n` +
         `📱 \`${state.accountNumber}\`\n\n` +
-        `_Users can now select this in /topup_`,
-        { parse_mode: 'Markdown' }
+        `${t(ctx, 'topup.users_can_select')}`,
+        {
+          parse_mode: 'Markdown',
+          ...Markup.inlineKeyboard([
+            [Markup.button.callback('➕ Add Another', 'addpayment_start')],
+            [Markup.button.callback(t(ctx, 'common.back_to_admin'), 'nav:go:admin_main')],
+            [Markup.button.callback(t(ctx, 'common.menu'), 'nav:go:main')],
+          ]),
+        }
       );
     }
   });

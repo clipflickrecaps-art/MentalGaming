@@ -82,6 +82,7 @@ function loadCommands(bot) {
     'launch.js',            // ← /launchbroadcast + /setseason + /seasonlist + /previewseason
     'trackOrder.js',        // ← /trackorder <shortId> — live status lookup + refresh
     'adminGameConfig.js',
+    'channelAutoPost.js',   // ← Channel auto-post scheduler (owner)
     'admin.js',
     'help.js',
     'ambient.js',           // ← LAST: catch-all ambient AI text handler

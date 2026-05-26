@@ -91,6 +91,7 @@ artifacts/bot/
 │   │   ├── sysinfo.js         # /sysinfo, /runbackup, /runcron, /flushcache
 │   │   ├── health.js          # /checkhealth (50-op load test), /checkmodules
 │   │   ├── launch.js          # /launchbroadcast, /setseason, /seasonlist, /previewseason
+│   │   ├── channelAutoPost.js # /addchannelpost, /listchannelposts, /sendchannelpost, /togglechannelpost, /delchannelpost
 │   │   ├── admin.js           # Admin panel
 │   │   ├── help.js            # Help menu
 │   │   └── ambient.js         # LAST: catch-all AI ambient handler
@@ -142,6 +143,7 @@ artifacts/bot/
 │   │   ├── PriceCalculator.js
 │   │   ├── WebhookProcessor.js
 │   │   ├── OrderTrackingService.js  # Live order status thread (Pending→Processing→Complete)
+│   │   ├── ChannelAutoPostService.js # Scheduled channel auto-posts (10-min tick)
 │   │   └── aiService.js       # callGemini() wrapper
 │   ├── scenes/                # Telegraf Scenes
 │   │   ├── orderScene.js      # → sends OrderTrackingService.sendOrderPlaced() after createOrder()
@@ -243,6 +245,26 @@ Daily schedule (Myanmar Time = UTC+6:30):
 | `/reftiers` | Manager+ | View current referral tier table |
 | `/trackorder [shortId]` | All | Live order status card + 🔄 Refresh + ⚠️ Support prompt after threshold |
 | `/setstalesupport <min>` | Owner | Set minutes before [Contact Support] button appears on stale orders |
+| `/addchannelpost` | Owner | Wizard to schedule a daily channel auto-post (HH:MM MMT) |
+| `/listchannelposts` | Owner | List all configured channel auto-posts |
+| `/sendchannelpost <id>` | Owner | Send a configured post immediately (test) |
+| `/togglechannelpost <id>` | Owner | Toggle auto-post active/inactive |
+| `/delchannelpost <id>` | Owner | Delete a channel auto-post |
+
+### Channel Auto-Posts
+
+Owner-only system for scheduling daily promotional posts to Telegram channels:
+- Model: `ChannelAutoPost` — `channelId`, `title`, `body` (Markdown), `scheduledHour`, `scheduledMinute`, `isActive`, `lastSentDate` (MST), `sendCount`
+- Cron tick: every 10 minutes via `ChannelAutoPostService.runDuePosts()`; deduplicates per MST date
+- Bot must be admin in the destination channel with post permission
+
+### Spin Wheel — Custom Rewards (Owner)
+
+Admin can add unlimited custom prizes via `/dashboard → 🎰 Spin → ➕ Add Custom Reward`:
+- 4 types: `coin` (Mental Coins), `ks` (cash), `spin` (free spin), `none` (thank-you)
+- Each prize: label, amount, weight (probability)
+- Stored in `GameConfig.customSpinPrizes[]`; merged with default pool by `GameService.getEffectivePrizePool()`
+- Remove via 🗑 button in spin panel
 
 ### Packages
 

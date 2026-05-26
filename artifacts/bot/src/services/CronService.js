@@ -24,6 +24,7 @@ const OrderArchive   = require('../models/OrderArchive');
 const Promo          = require('../models/Promo');
 const Transaction    = require('../models/Transaction');
 const CacheService   = require('./CacheService');
+const ChannelAutoPostService = require('./ChannelAutoPostService');
 const { config }     = require('../../config/settings');
 
 const ARCHIVE_CUTOFF_MONTHS = 6;
@@ -204,6 +205,24 @@ async function triggerBackup(telegram) {
   }
 }
 
+// ── Job 6: Channel auto-post tick (every 10 min) ─────────────────────────────
+
+async function tickChannelAutoPosts(telegram) {
+  try {
+    const res = await ChannelAutoPostService.runDuePosts(telegram);
+    if (res.sent > 0 || res.failed > 0) {
+      console.log(`[CronService] 📣 ChannelAutoPost: sent=${res.sent} failed=${res.failed}`);
+    }
+    if (res.failed > 0) {
+      await safeSend(telegram, `📣 *Cron: ChannelAutoPost*\n⚠️ ${res.failed} post(s) failed to send. Check logs.`);
+    }
+    return res;
+  } catch (err) {
+    console.error('[CronService] ❌ ChannelAutoPost tick:', err.message);
+    return { sent: 0, failed: 0, error: err.message };
+  }
+}
+
 // ── Cron scheduler ────────────────────────────────────────────────────────────
 
 let scheduledJobs = [];
@@ -239,7 +258,12 @@ function startCronJobs(telegram) {
     cron.schedule('30 23 * * *', () => triggerBackup(telegram), { timezone: 'UTC' })
   );
 
-  console.log('[CronService] ✅ 5 cron jobs scheduled (Archive/Promo/Screenshots/Cache/Backup)');
+  // Channel auto-posts: every 10 minutes
+  scheduledJobs.push(
+    cron.schedule('*/10 * * * *', () => tickChannelAutoPosts(telegram), { timezone: 'UTC' })
+  );
+
+  console.log('[CronService] ✅ 6 cron jobs scheduled (Archive/Promo/Screenshots/Cache/Backup/ChannelPosts)');
 }
 
 function stopCronJobs() {
@@ -264,4 +288,5 @@ module.exports = {
   manualScreens:  logStaleScreenshots,
   manualCache:    flushCache,
   manualBackup:   triggerBackup,
+  manualChannelPosts: tickChannelAutoPosts,
 };

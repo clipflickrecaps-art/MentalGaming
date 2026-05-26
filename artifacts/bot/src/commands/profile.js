@@ -102,11 +102,12 @@ Nav.register({
 
 // ── Progress view ─────────────────────────────────────────────────────────────
 async function sendProgressView(ctx) {
+  const { t } = require('../utils/i18n');
   const user = await User.findByTelegramId(ctx.from.id);
-  if (!user) return ctx.reply('❌ Please /start first.');
+  if (!user) return ctx.reply(t(ctx, 'common.start_first'));
 
   const progress = await getTierProgress(user.telegramId);
-  if (!progress) return ctx.reply('❌ Could not load progress.');
+  if (!progress) return ctx.reply(t(ctx, 'progress.load_failed'));
 
   const tierCfg = await getTierConfig();
   const tier    = user.membershipTier;
@@ -115,26 +116,26 @@ async function sendProgressView(ctx) {
   let text;
   if (!progress.nextTier) {
     text =
-      `💎 *Platinum Member — MAX TIER*\n\n` +
-      `You've reached the highest tier!\n\n` +
-      `${cfg.badge} Active Benefits:\n` +
-      `  🏷 *${cfg.discount}% discount* on all products\n` +
-      `  🪙 *${Math.round((cfg.bonusRate || 0.02) * 100)}% Mental Coin bonus* on top-ups\n` +
-      `  💎 Platinum badge`;
+      `${t(ctx, 'progress.max_title')}\n\n` +
+      `${t(ctx, 'progress.max_body')}\n\n` +
+      `${cfg.badge} ${t(ctx, 'progress.active_benefits')}\n` +
+      `  🏷 *${cfg.discount}%* ${t(ctx, 'progress.discount_on_all')}\n` +
+      `  🪙 *${Math.round((cfg.bonusRate || 0.02) * 100)}%* ${t(ctx, 'progress.coin_bonus')}\n` +
+      `  💎 ${t(ctx, 'progress.platinum_badge')}`;
   } else {
     const nextCfg = tierCfg[progress.nextTier];
     const bar = `[${formatProgressBar(progress.progressPct / 100)}] ${progress.progressPct}%`;
     text =
-      `📊 *Tier Progress*\n\n` +
-      `Current Tier: ${cfg.badge} *${tier}*\n` +
-      `Next Tier:    ${nextCfg.badge} *${progress.nextTier}*\n\n` +
+      `${t(ctx, 'progress.title')}\n\n` +
+      `${t(ctx, 'progress.current_tier')}: ${cfg.badge} *${tier}*\n` +
+      `${t(ctx, 'progress.next_tier')}:    ${nextCfg.badge} *${progress.nextTier}*\n\n` +
       `\`${bar}\`\n\n` +
-      `💼 Deposited: *${user.totalDeposited.toLocaleString()} KS*\n` +
-      `🎯 Target: *${nextCfg.min.toLocaleString()} KS*\n\n` +
+      `💼 ${t(ctx, 'progress.deposited')}: *${user.totalDeposited.toLocaleString()} KS*\n` +
+      `🎯 ${t(ctx, 'progress.target')}: *${nextCfg.min.toLocaleString()} KS*\n\n` +
       `💡 ${progress.message}\n\n` +
-      `*${progress.nextTier} Benefits:*\n` +
-      `  🏷 *${nextCfg.discount}% discount* on all products\n` +
-      `  🪙 *${Math.round((nextCfg.bonusRate || 0.015) * 100 * 10) / 10}% coin bonus* on top-ups`;
+      `*${progress.nextTier} ${t(ctx, 'progress.benefits')}:*\n` +
+      `  🏷 *${nextCfg.discount}%* ${t(ctx, 'progress.discount_on_all')}\n` +
+      `  🪙 *${Math.round((nextCfg.bonusRate || 0.015) * 100 * 10) / 10}%* ${t(ctx, 'progress.coin_bonus')}`;
   }
 
   await ctx.reply(text + '\n\n_Use /topup to add funds._', { parse_mode: 'Markdown' });
