@@ -225,7 +225,7 @@ onboardingScene.action('ob_finish', async (ctx) => {
       `🎮 *Mental Gaming Store* — Ready to go, ${name}!`,
       {
         parse_mode: 'Markdown',
-        ...require('../utils/keyboard').mainMenuKeyboard(),
+        ...require('../utils/keyboard').mainMenuKeyboard(ctx),
       }
     );
   } catch (err) {
@@ -249,7 +249,7 @@ onboardingScene.action('ob_skip', async (ctx) => {
     `🎮 *Mental Gaming Store* — Welcome!`,
     {
       parse_mode: 'Markdown',
-      ...require('../utils/keyboard').mainMenuKeyboard(),
+      ...require('../utils/keyboard').mainMenuKeyboard(ctx),
     }
   );
   await ctx.scene.leave();

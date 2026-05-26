@@ -89,7 +89,7 @@ module.exports = function registerCheckIn(bot) {
     await handleCheckIn(ctx);
   });
 
-  bot.hears(['🗓 Check In', '✅ Check In', 'checkin'], checkRestrictions('checkin'), async (ctx) => {
+  bot.hears(['🗓 Check In', '🗓 နေ့စဉ်ဝင်', '✅ Check In', 'checkin'], checkRestrictions('checkin'), async (ctx) => {
     await handleCheckIn(ctx);
   });
 

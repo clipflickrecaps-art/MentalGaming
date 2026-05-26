@@ -1,13 +1,15 @@
 const { Markup } = require('telegraf');
+const { t } = require('./i18n');
 
-function mainMenuKeyboard() {
+function mainMenuKeyboard(ctxOrLang) {
+  const L = (k) => t(ctxOrLang, k);
   return Markup.keyboard([
-    ['🛒 Shop', '📦 My Orders'],
-    ['💰 Wallet', '👤 My Profile'],
-    ['🗓 Check In', '🎰 Spin Wheel'],
-    ['🎟 Promo', '👥 Referral'],
-    ['📖 My Game IDs', '❓ FAQ'],
-    ['💬 Support', '⚙️ Settings'],
+    [L('menu.shop'),     L('menu.orders')],
+    [L('menu.wallet'),   L('menu.profile')],
+    [L('menu.checkin'),  L('menu.spin')],
+    [L('menu.promo'),    L('menu.referral')],
+    [L('menu.gameids'),  L('menu.faq')],
+    [L('menu.support'),  L('menu.settings')],
   ]).resize();
 }
 

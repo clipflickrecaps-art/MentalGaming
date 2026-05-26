@@ -459,7 +459,7 @@ module.exports = function registerAdmin(bot) {
 
   // 🔙 Back to Main → switch reply keyboard back to user main menu
   bot.hears('🔙 Back to Main', async (ctx) => {
-    await ctx.reply('🏠 Back to main menu.', mainMenuKeyboard());
+    await ctx.reply('🏠 Back to main menu.', mainMenuKeyboard(ctx));
   });
 
   // ── Admin inline nav action handlers ──────────────────────────────────────

@@ -3,6 +3,7 @@ const { buildMessage } = require('../utils/ui');
 const { Markup } = require('telegraf');
 const Nav = require('../services/NavigationService');
 const User = require('../models/User');
+const { t } = require('../utils/i18n');
 
 Nav.register({
   id: 'settings_view',
@@ -11,16 +12,19 @@ Nav.register({
     const currentTheme = ctx.user?.theme    || 'auto';
     const currentLang  = ctx.user?.language || 'en';
 
-    const langLabel = currentLang === 'mm' ? '🇲🇲 Myanmar' : '🇬🇧 English';
+    const langLabel  = currentLang === 'mm' ? '🇲🇲 မြန်မာ' : '🇬🇧 English';
+    const themeName  = currentTheme === 'auto'
+      ? (currentLang === 'mm' ? 'အလိုလျောက် (မြန်မာအချိန်)' : 'Auto (Myanmar Time)')
+      : currentTheme;
 
     const text = buildMessage(theme, [
       {
-        title: '⚙️ Settings',
+        title: t(ctx, 'settings.title'),
         lines: [
-          `${theme.emoji.settings} *Display Theme:* ${currentTheme === 'auto' ? 'Auto (Myanmar Time)' : currentTheme}`,
-          `_Auto mode: 6PM–6AM MMT = Dark, 6AM–6PM = Light_`,
+          `${theme.emoji.settings} *${t(ctx, 'settings.theme')}:* ${themeName}`,
+          `_${t(ctx, 'settings.auto_hint')}_`,
           ``,
-          `🌐 *Language:* ${langLabel}`,
+          `🌐 *${t(ctx, 'settings.language')}:* ${langLabel}`,
         ],
       },
     ]);
@@ -34,7 +38,8 @@ module.exports = function registerSettings(bot) {
     await Nav.navigate(ctx, 'settings_view');
   });
 
-  bot.hears('⚙️ Settings', async (ctx) => {
+  // Match both English and Myanmar settings labels
+  bot.hears(['⚙️ Settings', '⚙️ ဆက်တင်'], async (ctx) => {
     await Nav.navigate(ctx, 'settings_view');
   });
 };

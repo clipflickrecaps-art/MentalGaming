@@ -49,7 +49,7 @@ module.exports = function registerAddressBook(bot) {
   };
 
   bot.command('myids', myIdsHandler);
-  bot.hears('📖 My Game IDs', myIdsHandler);
+  bot.hears(['📖 My Game IDs', '📖 ဂိမ်း ID များ'], myIdsHandler);
 
   // ── /saveid <Game> <GameID> [ZoneID] ["Nickname"] ──────────────────────────
   bot.command('saveid', async (ctx) => {

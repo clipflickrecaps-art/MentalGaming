@@ -11,7 +11,7 @@ module.exports = function registerSpin(bot) {
     await ctx.scene.enter('spin_wheel_scene');
   });
 
-  bot.hears('🎰 Spin Wheel', checkRestrictions('spin'), async (ctx) => {
+  bot.hears(['🎰 Spin Wheel', '🎰 ဘီးလှည့်'], checkRestrictions('spin'), async (ctx) => {
     await ctx.scene.enter('spin_wheel_scene');
   });
 

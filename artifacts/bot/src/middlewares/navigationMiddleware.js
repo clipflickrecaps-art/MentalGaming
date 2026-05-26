@@ -59,8 +59,8 @@ function navigationMiddleware(bot) {
 
   // ── Language setter ────────────────────────────────────────────────────────
   bot.action(/^lang_set:(.+)$/, async (ctx) => {
-    const lang = ctx.match[1];
-    const langLabel = lang === 'mm' ? '🇲🇲 Myanmar' : '🇬🇧 English';
+    const lang = ctx.match[1] === 'mm' ? 'mm' : 'en';
+    const langLabel = lang === 'mm' ? '🇲🇲 မြန်မာ' : '🇬🇧 English';
     await ctx.answerCbQuery(`Language: ${langLabel}`);
 
     try {
@@ -69,12 +69,27 @@ function navigationMiddleware(bot) {
 
       const theme = getTheme(ctx.user);
       const currentTheme = ctx.user?.theme || 'auto';
+      const { t } = require('../utils/i18n');
+      const { mainMenuKeyboard } = require('../utils/keyboard');
+
+      const themeLabel = currentTheme === 'auto'
+        ? (lang === 'mm' ? 'အလိုလျောက် (မြန်မာအချိန်)' : 'Auto (Myanmar Time)')
+        : currentTheme;
+
+      // 1) Edit the settings card in-place
       await ctx.editMessageText(
-        `${theme.format.header('Settings Updated')}\n${theme.emoji.settings} Theme: ${theme.format.bold(currentTheme === 'auto' ? 'Auto (Myanmar Time)' : currentTheme)}\n🌐 Language: ${langLabel}\n\n_Changes apply immediately._`,
-        {
-          parse_mode: 'Markdown',
-          ...buildSettingsKeyboard(currentTheme, lang),
-        }
+        `${theme.format.header(t(ctx, 'settings.updated'))}\n` +
+        `${theme.emoji.settings} ${t(ctx, 'settings.theme')}: ${theme.format.bold(themeLabel)}\n` +
+        `🌐 ${t(ctx, 'settings.language')}: ${langLabel}\n\n` +
+        `_${t(ctx, 'settings.applies')}_`,
+        { parse_mode: 'Markdown', ...buildSettingsKeyboard(currentTheme, lang) }
+      ).catch(() => {});
+
+      // 2) Send a NEW message with the freshly-localized reply keyboard so
+      //    the persistent buttons at the bottom actually update for the user.
+      await ctx.reply(
+        `🌐 ${t(ctx, 'settings.menu_updated')}`,
+        mainMenuKeyboard(ctx)
       );
     } catch (err) {
       await ctx.reply(`❌ ${err.message}`);

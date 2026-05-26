@@ -95,7 +95,7 @@ module.exports = function registerFAQ(bot) {
     return faqMenuHandler(ctx);
   });
 
-  bot.hears('❓ FAQ', faqMenuHandler);
+  bot.hears(['❓ FAQ', '❓ မေးခွန်းများ'], faqMenuHandler);
 
   // ── Category browse ───────────────────────────────────────────────────────────
 

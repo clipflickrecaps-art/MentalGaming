@@ -38,7 +38,7 @@ Nav.register({
     ]);
 
     // Reply keyboard (persistent buttons) — no inline buttons on the main menu
-    return { text, keyboard: mainMenuKeyboard() };
+    return { text, keyboard: mainMenuKeyboard(ctx) };
   },
 });
 
@@ -171,7 +171,7 @@ module.exports = function registerShop(bot) {
     await Nav.navigate(ctx, 'shop');
   });
 
-  bot.hears('🛒 Shop', async (ctx) => {
+  bot.hears(['🛒 Shop', '🛒 ဈေးဝယ်'], async (ctx) => {
     Nav.clearHistory(ctx);
     await Nav.navigate(ctx, 'shop');
   });

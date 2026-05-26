@@ -140,6 +140,8 @@ module.exports = function registerStart(bot) {
     // ── Build single welcome panel with PERSISTENT REPLY KEYBOARD ────────────
     const isAdmin = Number(ctx.from.id) === Number(config.bot.adminId);
 
+    const { t: tt } = require('../utils/i18n');
+    const lang = ctx.user?.language || 'en';
     let panel;
     if (isAdmin) {
       panel =
@@ -149,14 +151,18 @@ module.exports = function registerStart(bot) {
     } else {
       const balanceKS   = ctx.user?.balanceKS   || 0;
       const balanceCoin = ctx.user?.balanceCoin || 0;
+      const greet      = lang === 'mm' ? `👋 ကြိုဆိုပါတယ်၊ *${name}*!` : `👋 Welcome, *${name}*!`;
+      const balLabel   = lang === 'mm' ? 'လက်ကျန်ငွေ' : 'Balance';
+      const coinLabel  = lang === 'mm' ? 'ဒင်္ဂါးများ'  : 'Coins';
+      const tierLabel  = lang === 'mm' ? 'အဆင့်'      : 'Tier';
       panel =
         `🎮 *Mental Gaming Store*\n` +
         `━━━━━━━━━━━━━━━━━━━\n` +
-        `👋 Welcome, *${name}*!\n` +
-        `💰 Balance: \`${price(balanceKS)}\`\n` +
-        `💎 Coins: \`${balanceCoin.toLocaleString()} MC\`\n` +
-        `🌟 Tier: *${tier}*\n\n` +
-        `_Tap a button below to continue._`;
+        `${greet}\n` +
+        `💰 ${balLabel}: \`${price(balanceKS)}\`\n` +
+        `💎 ${coinLabel}: \`${balanceCoin.toLocaleString()} MC\`\n` +
+        `🌟 ${tierLabel}: *${tier}*\n\n` +
+        `_${tt(ctx, 'welcome.tap_below')}_`;
     }
 
     const notice = (extraNote || '') + (referralNotice || '');
@@ -166,7 +172,7 @@ module.exports = function registerStart(bot) {
 
     return ctx.reply(panel, {
       parse_mode: 'Markdown',
-      ...(isAdmin ? adminMenuKeyboard() : mainMenuKeyboard()),
+      ...(isAdmin ? adminMenuKeyboard() : mainMenuKeyboard(ctx)),
     });
   });
 };

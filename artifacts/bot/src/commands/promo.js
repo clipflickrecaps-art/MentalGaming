@@ -15,7 +15,7 @@ const { config } = require('../../config/settings');
 
 module.exports = function registerPromo(bot) {
 
-  bot.hears('🎟 Promo', async (ctx) => {
+  bot.hears(['🎟 Promo', '🎟 ပရိုမို'], async (ctx) => {
     await ctx.reply(
       `🎟 *Promo Codes*\n\nTo check a promo code, type:\n\`/promo YOUR_CODE\`\n\nPromo codes are applied during checkout in the 🛒 Shop.`,
       { parse_mode: 'Markdown' }

@@ -24,7 +24,7 @@ Nav.register({
     if (!user) {
       return {
         text: '❌ Could not load profile. Please type /start and try again.',
-        keyboard: mainMenuKeyboard(),
+        keyboard: mainMenuKeyboard(ctx),
       };
     }
 
@@ -96,7 +96,7 @@ Nav.register({
 
     const text = buildMessage(theme, [{ title: '👤 My Profile', lines }]);
 
-    return { text, keyboard: mainMenuKeyboard() };
+    return { text, keyboard: mainMenuKeyboard(ctx) };
   },
 });
 
@@ -145,7 +145,7 @@ module.exports = function registerProfile(bot) {
     await Nav.navigate(ctx, 'profile_view');
   });
 
-  bot.hears('👤 My Profile', async (ctx) => {
+  bot.hears(['👤 My Profile', '👤 ပရိုဖိုင်'], async (ctx) => {
     await Nav.navigate(ctx, 'profile_view');
   });
 

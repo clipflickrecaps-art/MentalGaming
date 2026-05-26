@@ -162,7 +162,7 @@ module.exports = function registerReferral(bot) {
   };
 
   bot.command('referral', referralHandler);
-  bot.hears('👥 Referral', referralHandler);
+  bot.hears(['👥 Referral', '👥 မိတ်ဆက်'], referralHandler);
 
   // ── /reflink — quick shareable invite ────────────────────────────────────────
 

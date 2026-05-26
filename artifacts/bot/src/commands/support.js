@@ -43,7 +43,7 @@ Nav.register({
       },
     ]);
 
-    return { text, keyboard: mainMenuKeyboard() };
+    return { text, keyboard: mainMenuKeyboard(ctx) };
   },
 });
 
@@ -54,7 +54,7 @@ module.exports = function registerSupport(bot) {
     await ctx.scene.enter('support_scene');
   });
 
-  bot.hears('💬 Support', async (ctx) => {
+  bot.hears(['💬 Support', '💬 အကူအညီ'], async (ctx) => {
     await ctx.scene.enter('support_scene');
   });
 

@@ -15,7 +15,7 @@ Nav.register({
     if (!user) {
       return {
         text: '❌ Could not load wallet. Please type /start and try again.',
-        keyboard: mainMenuKeyboard(),
+        keyboard: mainMenuKeyboard(ctx),
       };
     }
 
@@ -54,7 +54,7 @@ Nav.register({
       },
     ]);
 
-    return { text, keyboard: mainMenuKeyboard() };
+    return { text, keyboard: mainMenuKeyboard(ctx) };
   },
 });
 
@@ -105,7 +105,7 @@ module.exports = function registerWallet(bot) {
     await Nav.navigate(ctx, 'wallet_view');
   });
 
-  bot.hears('💰 Wallet', async (ctx) => {
+  bot.hears(['💰 Wallet', '💰 ပိုက်ဆံအိတ်'], async (ctx) => {
     await Nav.navigate(ctx, 'wallet_view');
   });
 

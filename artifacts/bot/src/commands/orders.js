@@ -130,7 +130,7 @@ module.exports = function registerOrders(bot) {
     await Nav.navigate(ctx, 'my_orders');
   });
 
-  bot.hears('📦 My Orders', async (ctx) => {
+  bot.hears(['📦 My Orders', '📦 အော်ဒါများ'], async (ctx) => {
     await Nav.navigate(ctx, 'my_orders');
   });
 
