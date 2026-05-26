@@ -7,6 +7,7 @@ const { buildMessage, price, formatDate } = require('../utils/ui');
 const { getCoinBonusRates } = require('../services/WalletService');
 const { getTierProgress, getTierConfig, formatProgressBar } = require('../services/MembershipService');
 const { Markup } = require('telegraf');
+const { mainMenuKeyboard } = require('../utils/keyboard');
 const User = require('../models/User');
 
 function tierBadge(tier) {
@@ -22,11 +23,8 @@ Nav.register({
     const user = ctx.user || (ctx.from?.id ? await User.findByTelegramId(ctx.from.id) : null);
     if (!user) {
       return {
-        text: '❌ Could not load profile. Please tap the button below to try again.',
-        keyboard: Markup.inlineKeyboard([
-          [Markup.button.callback('🔄 Retry', 'nav:go:profile_view')],
-          Nav.backButton('🔙 Main Menu'),
-        ]),
+        text: '❌ Could not load profile. Please type /start and try again.',
+        keyboard: mainMenuKeyboard(),
       };
     }
 
@@ -89,16 +87,16 @@ Nav.register({
       `📅 Joined: ${formatDate(user.joinDate)}`,
     ].filter(Boolean);
 
+    lines.push(``);
+    lines.push(`_Commands:_`);
+    lines.push(`• /topup — Top Up Wallet`);
+    lines.push(`• /history — KS Transaction History`);
+    lines.push(`• /progress — Tier Progress`);
+    lines.push(`• /settings — Theme & Language`);
+
     const text = buildMessage(theme, [{ title: '👤 My Profile', lines }]);
 
-    return {
-      text,
-      keyboard: Markup.inlineKeyboard([
-        [Markup.button.callback('💳 Top Up', 'start_topup'), Markup.button.callback('📜 History', 'wallet_history')],
-        [Markup.button.callback('📊 Tier Progress', 'profile_progress'), Markup.button.callback('⚙️ Settings', 'nav:go:settings_view')],
-        Nav.backButton('🔙 Main Menu'),
-      ]),
-    };
+    return { text, keyboard: mainMenuKeyboard() };
   },
 });
 
@@ -139,13 +137,7 @@ async function sendProgressView(ctx) {
       `  🪙 *${Math.round((nextCfg.bonusRate || 0.015) * 100 * 10) / 10}% coin bonus* on top-ups`;
   }
 
-  await ctx.reply(text, {
-    parse_mode: 'Markdown',
-    ...Markup.inlineKeyboard([
-      [Markup.button.callback('💳 Top Up to Progress', 'start_topup')],
-      [Markup.button.callback('🔙 Back to Profile', 'nav:go:profile_view')],
-    ]),
-  });
+  await ctx.reply(text + '\n\n_Use /topup to add funds._', { parse_mode: 'Markdown' });
 }
 
 module.exports = function registerProfile(bot) {

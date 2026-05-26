@@ -3,6 +3,7 @@ const Nav = require('../services/NavigationService');
 const { buildMessage, price, formatDate } = require('../utils/ui');
 const { getHistory, getCoinBonusRates } = require('../services/WalletService');
 const { getTierConfig } = require('../services/MembershipService');
+const { mainMenuKeyboard } = require('../utils/keyboard');
 const User = require('../models/User');
 
 Nav.register({
@@ -13,11 +14,8 @@ Nav.register({
     const user = ctx.user || (ctx.from?.id ? await User.findByTelegramId(ctx.from.id) : null);
     if (!user) {
       return {
-        text: '❌ Could not load wallet. Please tap retry below.',
-        keyboard: Markup.inlineKeyboard([
-          [Markup.button.callback('🔄 Retry', 'nav:go:wallet_view')],
-          Nav.backButton('🔙 Main Menu'),
-        ]),
+        text: '❌ Could not load wallet. Please type /start and try again.',
+        keyboard: mainMenuKeyboard(),
       };
     }
 
@@ -47,21 +45,60 @@ Nav.register({
           `🎁 Coin Bonus Rate: ${theme.format.bold(`+${bonusPct}%`)} on top-ups`,
           `💼 Total Deposited: ${price(deposited)}`,
           progressLine,
+          ``,
+          `_Commands:_`,
+          `• /topup — Top Up Wallet`,
+          `• /history — Transaction History`,
+          `• /coinhistory — Mental Coin History`,
         ],
       },
     ]);
 
-    return {
-      text,
-      keyboard: Markup.inlineKeyboard([
-        [Markup.button.callback('💳 Top Up Wallet',       'start_topup')],
-        [Markup.button.callback('📜 Transaction History', 'wallet_history')],
-        [Markup.button.callback('🎁 Coin History',        'coin_history')],
-        Nav.backButton('🔙 Main Menu'),
-      ]),
-    };
+    return { text, keyboard: mainMenuKeyboard() };
   },
 });
+
+async function sendKsHistory(ctx) {
+  const user = await User.findByTelegramId(ctx.from.id);
+  if (!user) return ctx.reply('❌ User not found. Please /start first.');
+
+  const txs = await getHistory(user._id, { limit: 10, wallet: 'KS' });
+  if (!txs.length) return ctx.reply('📜 No KS transactions yet. Use /topup to top up your wallet.');
+
+  const typeIcon = {
+    Topup: '💳', Purchase: '🛍️', Refund: '↩️',
+    AdminCredit: '⬆️', AdminDebit: '⬇️', Debit: '📤',
+  };
+  const lines = txs.map((t) => {
+    const icon = typeIcon[t.type] || '•';
+    const sign = t.amount > 0 ? '+' : '';
+    const dot  = { Completed: '🟢', Pending: '🟡', Rejected: '🔴' }[t.status] || '⚪';
+    return `${icon} ${sign}${t.amount.toLocaleString()} KS  ${dot}  _${formatDate(t.timestamp)}_`;
+  });
+
+  await ctx.reply(
+    `📜 *KS Transaction History*\n\n${lines.join('\n')}`,
+    { parse_mode: 'Markdown' }
+  );
+}
+
+async function sendCoinHistory(ctx) {
+  const user = await User.findByTelegramId(ctx.from.id);
+  if (!user) return ctx.reply('❌ User not found. Please /start first.');
+
+  const txs = await getHistory(user._id, { limit: 10, wallet: 'Coin' });
+  if (!txs.length) return ctx.reply('🪙 No coin transactions yet.');
+
+  const lines = txs.map((t) => {
+    const sign = t.amount > 0 ? '+' : '';
+    return `🎁 ${sign}${t.amount.toLocaleString()} MC  _${formatDate(t.timestamp)}_`;
+  });
+
+  await ctx.reply(
+    `🪙 *Mental Coin History*\n\n${lines.join('\n')}`,
+    { parse_mode: 'Markdown' }
+  );
+}
 
 module.exports = function registerWallet(bot) {
   bot.command('wallet', async (ctx) => {
@@ -71,6 +108,9 @@ module.exports = function registerWallet(bot) {
   bot.hears('💰 Wallet', async (ctx) => {
     await Nav.navigate(ctx, 'wallet_view');
   });
+
+  bot.command('history',     (ctx) => sendKsHistory(ctx));
+  bot.command('coinhistory', (ctx) => sendCoinHistory(ctx));
 
   bot.action('start_topup', async (ctx) => {
     await ctx.answerCbQuery();

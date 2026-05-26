@@ -14,6 +14,7 @@ const Nav = require('../services/NavigationService');
 const { buildMessage, formatDate } = require('../utils/ui');
 const { requireRole, isAnyAdmin } = require('../middlewares/adminCheck');
 const { auditLog } = require('../services/logger');
+const { mainMenuKeyboard } = require('../utils/keyboard');
 const SupportTicket = require('../models/SupportTicket');
 
 const TOPIC_META = {
@@ -36,20 +37,13 @@ Nav.register({
           `👨 Human support: *9AM – 11PM* MMT`,
           `⚡ AI responds instantly`,
           ``,
-          `*How can we help you today?*`,
+          `*Type /support to start a chat with our AI assistant.*`,
+          `It can help with orders, payments, game IDs, and more — and will escalate to a human if needed.`,
         ],
       },
     ]);
 
-    return {
-      text,
-      keyboard: Markup.inlineKeyboard([
-        [Markup.button.callback('🤖 Get AI Help',        'support_ai_start')],
-        [Markup.button.callback('📦 Order Issue',        'support_ai_start')],
-        [Markup.button.callback('💳 Payment / Wallet',   'support_ai_start')],
-        Nav.backButton('🔙 Main Menu'),
-      ]),
-    };
+    return { text, keyboard: mainMenuKeyboard() };
   },
 });
 
