@@ -1,0 +1,90 @@
+🛡️ ADMIN ဘက်
+3-tier RBAC system: Owner / Manager / Staff
+
+📊 Dashboard (Manager+)
+Live stats — pending orders, processing, active products, total users
+Gateway status panel (KPay/Wave/AYA/CB — Online/Busy/Offline)
+📦 Manage Orders
+Pending order list — Game ID + Customer + Amount ပြ
+Each order card:
+🔄 Processing button — customer notification auto
+✅ Complete button — delivery confirm + receipt ပို့
+❌ Cancel & Refund — wallet refund + reason
+Stale order alerts
+🛍️ Manage Products (Manager+)
+Product CRUD (add/edit/delete/toggle active)
+Stock management (unlimited or count)
+Category & region settings
+Flash sale create/schedule
+👥 Manage Users
+User search by Telegram ID / username
+⚠️ Warn (3 warnings = auto-ban)
+🚫 Ban / ✅ Unban
+🔒 Restrict (order/topup/spin individually)
+💳 Adjust Balance (manual credit/debit + audit)
+View user profile, history
+💱 Manage Rates (Manager+)
+Live currency rate fetch (USD/CNY/THB)
+Bulk approve all affected products
+Manual per-product price edit
+📢 Broadcast (Manager+)
+All users / Tier-specific / Active users (last 30 days)
+Text + image support
+Schedule + audit log
+🎟 Promotions (Owner)
+Create promo code (Flat/Percent discount)
+Min order, max uses, expiry date
+/listpromos /deletepromo
+💰 Coins & Tiers (Owner)
+Tier threshold edit (Silver/Gold/Platinum minimum deposits)
+Coin bonus rates per tier
+Tier discount %
+🎰 Spin Wheel (Owner)
+Reward pool config (KS/Coin/Discount/Promo)
+Probability tuning, daily spin limits
+👥 Referral (Owner)
+/setreftiers 1:2 6:3 16:5 — commission tiers edit
+/togglereferral — pause/resume program
+/reffraud — fraud detection review
+📋 Audit Logs
+Every admin action logged (who/what/when)
+Order status changes, user adjustments, broadcasts
+📈 Analytics (Manager+)
+/analytics — Revenue/profit/orders dashboard (daily/weekly/monthly)
+/analyticsai — 🤖 Gemini AI business report
+/forecast — 7-day AI sales forecast
+/sentimentreport — Customer review sentiment analysis (auto-alert on negative)
+/exportdetail — CSV export (orders/transactions/users)
+🎫 Support Tickets
+Ticket queue (Open/In Progress/Resolved)
+Reply, assign, resolve, archive
+📜 Template library — quick reply
+Negative sentiment auto-flag
+🔧 SRE / System (Owner)
+/sysinfo — memory, CPU, DB, cache, pending stats
+/runbackup — manual AES-256 encrypted DB backup → Telegram channel
+/runcron — manual cron jobs (archive/purge/audit)
+/flushcache — clear in-memory cache
+/systemhealth — gateway + system status
+/checkhealth — 50-operation load test
+/setgateway — gateway status toggle (Online/Busy/Offline)
+/setstalesupport <min> — stale order threshold
+🤖 Auto-Systems (24/7 background)
+CronService — Daily 3AM MMT
+Archive orders > 6 months
+Deactivate expired promos
+Clean stale screenshots
+BackupService — Daily 6AM MMT, AES-256 encrypted, sent to channel
+FlashSaleWatcher — Auto-start/stop flash sales
+FeedbackWatcher — Auto-collect reviews after delivery
+SentimentService — AI batch analysis on reviews, alert on negative
+AntiSpam — Rate limiting per user
+Error Handler — Global crash reporter to owner DM (5-min cooldown)
+🏗️ Architecture
+Telegraf 4.16 + Mongoose 8.x (MongoDB Atlas)
+Gemini 2.0 Flash — AI support + analytics + sentiment
+Cache — currency 15min, products 5min
+Live tracking — message thread reply chain
+3-role RBAC — Owner/Manager/Staff with granular permissions
+Audit log — every admin action recorded
+ဒါတွေ အကုန် active လုပ်ပြီးပါပြီ — /start (user) နဲ့ /dashboard (admin) ကနေ စမ်းကြည့်လို့ ရပါပြီ။

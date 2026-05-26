@@ -13,10 +13,13 @@ function mainMenuKeyboard() {
 
 function adminMenuKeyboard() {
   return Markup.keyboard([
-    ['📊 Dashboard',      '📦 Manage Orders'],
+    ['📊 Dashboard',       '📦 Manage Orders'],
     ['🛍️ Manage Products', '👥 Manage Users'],
-    ['💱 Manage Rates',   '📢 Broadcast'],
-    ['📋 Audit Logs',     '🔙 Back to Main'],
+    ['💱 Manage Rates',    '📢 Broadcast'],
+    ['🎟 Promotions',      '🎫 Support Tickets'],
+    ['📈 Analytics',       '🤖 AI Insights'],
+    ['🔧 System',          '📋 Audit Logs'],
+    ['📖 Admin Guide',     '🔙 Back to Main'],
   ]).resize();
 }
 

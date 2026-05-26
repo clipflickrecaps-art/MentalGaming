@@ -1,4 +1,4 @@
-const { adminOnly } = require('../middlewares/adminCheck');
+const { adminOnly, requireRole } = require('../middlewares/adminCheck');
 const { fetchLiveRates, getAllRates } = require('../services/currencyService');
 const { auditLog } = require('../services/logger');
 const { listUsers } = require('../services/UserManagementService');
@@ -9,8 +9,13 @@ const Product = require('../models/Product');
 const AuditLog = require('../models/AuditLog');
 const User = require('../models/User');
 const Promo = require('../models/Promo');
+const SupportTicket = require('../models/SupportTicket');
+const SystemStatus = require('../models/SystemStatus');
+const CacheService = require('../services/CacheService');
+const AnalyticsService = require('../services/AnalyticsService');
 const { price } = require('../utils/ui');
 const { adminMenuKeyboard, mainMenuKeyboard } = require('../utils/keyboard');
+const os = require('os');
 
 // ── Admin main nav — inline panel with live stats ─────────────────────────────
 
@@ -155,6 +160,301 @@ module.exports = function registerAdmin(bot) {
       `📋 *Audit Log (last ${entries.length})*\n\n${lines.join('\n\n')}`,
       { parse_mode: 'Markdown' }
     );
+  });
+
+  // 🎟 Promotions → list all promo codes + create button
+  bot.hears('🎟 Promotions', adminOnly(), async (ctx) => {
+    const promos = await Promo.find({}).sort({ createdAt: -1 }).limit(20);
+    if (!promos.length) {
+      return ctx.reply('🎟 No promo codes yet.\n\nUse /createpromo to create one.', {
+        ...Markup.inlineKeyboard([[Markup.button.callback('➕ Create New', 'promo_create_start')]]),
+      });
+    }
+    const lines = promos.map((p) => {
+      const disc   = p.discountType === 'Flat' ? `${price(p.value)} off` : `${p.value}% off`;
+      const uses   = p.maxUses ? `${p.currentUses}/${p.maxUses}` : `${p.currentUses}/∞`;
+      const status = p.isActive ? '🟢' : '🔴';
+      return `${status} \`${p.code}\` — ${disc} — Uses: ${uses}`;
+    });
+    await ctx.reply(
+      `🎟 *Promo Codes (${promos.length})*\n\n${lines.join('\n')}\n\n` +
+      `_Commands:_\n• /createpromo — guided creation\n• /deletepromo CODE — deactivate`,
+      {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard([[Markup.button.callback('➕ Create New', 'promo_create_start')]]),
+      }
+    );
+  });
+
+  // 🎫 Support Tickets → open + in-progress tickets
+  bot.hears('🎫 Support Tickets', adminOnly(), async (ctx) => {
+    const tickets = await SupportTicket.find({
+      status: { $in: ['Open', 'InProgress'] },
+      isArchived: { $ne: true },
+    }).sort({ createdAt: -1 }).limit(10);
+
+    if (!tickets.length) {
+      return ctx.reply('✅ No open tickets right now.\n\n_Use /tickets all to see resolved ones._', { parse_mode: 'Markdown' });
+    }
+
+    const priorityBadge = { Normal: '🟡', High: '🟠', Urgent: '🔴' };
+    const lines = tickets.map((t) => {
+      const userTag  = t.username ? `@${t.username}` : `ID:${t.telegramId}`;
+      const badge    = priorityBadge[t.priority] || '🟡';
+      const assigned = t.assignedAdmin ? ` 🔵${t.assignedAdmin}` : '';
+      return `${badge} \`${t.ticketId}\` — ${t.topic} — ${userTag}${assigned} _(${t.status})_`;
+    });
+
+    await ctx.reply(
+      `🎫 *Open Tickets (${tickets.length})*\n\n${lines.join('\n')}\n\n` +
+      `_Use /tickets to see full cards with Reply/Resolve/Assign buttons._`,
+      { parse_mode: 'Markdown' }
+    );
+  });
+
+  // 📈 Analytics → today's report quick view
+  bot.hears('📈 Analytics', requireRole('MANAGER'), async (ctx) => {
+    const wait = await ctx.reply('⏳ _Loading today\'s analytics..._', { parse_mode: 'Markdown' });
+    try {
+      const report = await AnalyticsService.getFullReport('today');
+      const r = report.revenue;
+      const text =
+        `📈 *Quick Analytics — Today*\n\n` +
+        `💰 Gross: *${(r.grossRevenue || 0).toLocaleString()} KS*\n` +
+        `💵 Net: *${(r.netRevenue || 0).toLocaleString()} KS*\n` +
+        `📊 Est. Profit: *${(r.netProfit || 0).toLocaleString()} KS* (${r.estimatedMarginPct}%)\n` +
+        `✅ Completed: *${r.orderCount}* | ❌ Cancelled: *${report.cancellation.cancelled}*\n` +
+        `👥 New Users: *+${report.users.newUsers}*\n\n` +
+        `_Use /analytics today|week|month for full report._`;
+      await ctx.telegram.deleteMessage(wait.chat.id, wait.message_id).catch(() => {});
+      await ctx.reply(text, {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard([
+          [
+            Markup.button.callback('📅 Today',  'analytics:today'),
+            Markup.button.callback('📆 Week',   'analytics:week'),
+            Markup.button.callback('🗓 Month',  'analytics:month'),
+          ],
+          [
+            Markup.button.callback('🤖 AI Report', 'analyticsai_run:today'),
+            Markup.button.callback('📥 Export',    'analytics_export_menu'),
+          ],
+        ]),
+      });
+    } catch (err) {
+      console.error('[Admin] Analytics quick view failed:', err);
+      await ctx.telegram
+        .editMessageText(wait.chat.id, wait.message_id, undefined, `❌ ${err.message}`)
+        .catch(() => ctx.reply(`❌ ${err.message}`));
+    }
+  });
+
+  // 🤖 AI Insights → menu for AI-powered admin reports
+  bot.hears('🤖 AI Insights', requireRole('MANAGER'), async (ctx) => {
+    await ctx.reply(
+      `🤖 *AI Insights — Gemini 2.0 Flash*\n\n` +
+      `Pick a report:\n\n` +
+      `📊 *Business Report* — Monthly revenue/profit summary\n` +
+      `🔮 *7-Day Forecast* — Sales prediction\n` +
+      `💬 *Sentiment Report* — Customer review analysis\n` +
+      `❤️ *System Health* — Gateway + system status`,
+      {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard([
+          [Markup.button.callback('📊 Business Report (Month)', 'analyticsai_run:month')],
+          [Markup.button.callback('🔮 7-Day Forecast',          'ai_forecast_run')],
+          [Markup.button.callback('💬 Sentiment Report',        'ai_sentiment_run')],
+          [Markup.button.callback('❤️ System Health',           'ai_syshealth_run')],
+        ]),
+      }
+    );
+  });
+
+  // 🔧 System → /sysinfo equivalent
+  bot.hears('🔧 System', requireRole('MANAGER'), async (ctx) => {
+    const wait = await ctx.reply('⏳ _Gathering system info..._', { parse_mode: 'Markdown' });
+    try {
+      const mem = process.memoryUsage();
+      const memUsedMB = (mem.heapUsed / 1024 / 1024).toFixed(1);
+      const memTotalMB = (mem.heapTotal / 1024 / 1024).toFixed(1);
+      const uptimeMin  = Math.floor(process.uptime() / 60);
+      const uptimeHr   = Math.floor(uptimeMin / 60);
+      const cacheStats = CacheService.getStats();
+      const [pending, processing, openTickets, sys] = await Promise.all([
+        Order.countDocuments({ status: 'Pending' }),
+        Order.countDocuments({ status: 'Processing' }),
+        SupportTicket.countDocuments({ status: { $in: ['Open', 'InProgress'] }, isArchived: { $ne: true } }),
+        SystemStatus.findOne({}),
+      ]);
+      const gatewayLines = (sys?.gateways || []).map((g) => {
+        const icon = g.status === 'Online' ? '🟢' : g.status === 'Busy' ? '🟡' : '🔴';
+        return `  ${icon} *${g.method}*: ${g.status}`;
+      }).join('\n') || '  _No gateway config_';
+
+      const text =
+        `🔧 *System Status*\n\n` +
+        `💾 Memory: *${memUsedMB} / ${memTotalMB} MB*\n` +
+        `⏱ Uptime: *${uptimeHr}h ${uptimeMin % 60}m*\n` +
+        `🖥 Node: ${process.version} | Platform: ${os.platform()}\n\n` +
+        `🗃 *Cache* — ${cacheStats.keys} keys, ${cacheStats.hits} hits, ${cacheStats.misses} misses\n\n` +
+        `📦 *Queue* — Pending: ${pending} | Processing: ${processing}\n` +
+        `🎫 Open Tickets: ${openTickets}\n` +
+        `🛡 Maintenance: ${sys?.maintenanceMode ? '🔴 ON' : '🟢 OFF'}\n\n` +
+        `💳 *Gateways:*\n${gatewayLines}\n\n` +
+        `_Commands: /sysinfo /runbackup /runcron /flushcache /checkhealth_`;
+
+      await ctx.telegram.deleteMessage(wait.chat.id, wait.message_id).catch(() => {});
+      await ctx.reply(text, {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard([
+          [
+            Markup.button.callback('🔄 Refresh',     'sysinfo_refresh'),
+            Markup.button.callback('🗃 Flush Cache',  'sysinfo_flush_cache'),
+          ],
+          [
+            Markup.button.callback('🗄 Run Backup',   'sysinfo_backup'),
+            Markup.button.callback('🔧 Run Cron',     'sysinfo_cron'),
+          ],
+        ]),
+      });
+    } catch (err) {
+      console.error('[Admin] System view failed:', err);
+      await ctx.telegram.editMessageText(wait.chat.id, wait.message_id, undefined, `❌ ${err.message}`).catch(() => {});
+    }
+  });
+
+  // 🤖 AI Insights wiring — forecast / sentiment / syshealth proxies
+  bot.action('ai_forecast_run', requireRole('MANAGER'), async (ctx) => {
+    await ctx.answerCbQuery('Generating forecast…');
+    const wait = await ctx.reply('🔮 _Analyzing 90 days of data… (~20s)_', { parse_mode: 'Markdown' });
+    try {
+      const AIInsightsService = require('../services/AIInsightsService');
+      const historicalTrend = await AnalyticsService.getHistoricalTrend(90);
+      if (historicalTrend.length < 7) {
+        await ctx.telegram.editMessageText(wait.chat.id, wait.message_id, undefined,
+          `⚠️ Not enough data for forecasting. Need ≥ 7 days of order history.`).catch(() => {});
+        return;
+      }
+      const forecast = await AIInsightsService.generateSalesForecast(historicalTrend);
+      await ctx.telegram.deleteMessage(wait.chat.id, wait.message_id).catch(() => {});
+      await ctx.reply(
+        `🔮 *7-Day Sales Forecast*\n_Based on ${historicalTrend.length} days of history_\n\n${forecast}`,
+        { parse_mode: 'Markdown' }
+      );
+    } catch (err) {
+      console.error('[Admin] Forecast failed:', err);
+      await ctx.telegram.editMessageText(wait.chat.id, wait.message_id, undefined, `❌ ${err.message}`)
+        .catch(() => ctx.reply(`❌ ${err.message}`));
+    }
+  });
+
+  bot.action('ai_sentiment_run', requireRole('MANAGER'), async (ctx) => {
+    await ctx.answerCbQuery('Loading sentiment report…');
+    await ctx.reply('💬 _Use /sentimentreport for the full sentiment analysis._', { parse_mode: 'Markdown' });
+  });
+
+  bot.action('ai_syshealth_run', requireRole('MANAGER'), async (ctx) => {
+    await ctx.answerCbQuery('Loading system health…');
+    await ctx.reply('❤️ _Use /systemhealth for full gateway + system status._', { parse_mode: 'Markdown' });
+  });
+
+  // 📖 Admin Guide → comprehensive usage guide
+  bot.hears('📖 Admin Guide', adminOnly(), async (ctx) => {
+    const part1 =
+      `📖 *Admin Panel Guide — Mental Gaming Store*\n` +
+      `_3-tier RBAC: Owner / Manager / Staff_\n` +
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
+
+      `📊 *Dashboard* _(Manager+)_\n` +
+      `Live stats — pending orders, active products, total users + gateway status panel.\n\n` +
+
+      `📦 *Manage Orders* _(Staff+)_\n` +
+      `• Pending list ပြ — Game ID, Customer, Amount\n` +
+      `• 🔄 Processing → customer notify auto\n` +
+      `• ✅ Complete → delivery receipt ပို့\n` +
+      `• ❌ Cancel & Refund → wallet refund + reason\n` +
+      `• Stale order alerts (default 30min)\n\n` +
+
+      `🛍️ *Manage Products* _(Manager+)_\n` +
+      `• /addproduct /editproduct /deleteproduct /toggleproduct\n` +
+      `• Stock management (unlimited or count)\n` +
+      `• /addcodes — digital gift card codes\n` +
+      `• /flashsale — schedule flash sales\n\n` +
+
+      `👥 *Manage Users* _(Owner)_\n` +
+      `• /users <name|id> — search\n` +
+      `• /userinfo /ban /unban /warn /unwarn\n` +
+      `• /restrict (order/topup/spin) /unrestrict\n` +
+      `• /adjustbal — manual credit/debit + audit\n` +
+      `• /penalize — fraud penalty\n\n` +
+
+      `💱 *Manage Rates* _(Manager+)_\n` +
+      `• /rates — view current\n` +
+      `• /fetchrates — live USD/CNY/THB fetch\n` +
+      `• /managerates — bulk approve + per-product edit\n\n` +
+
+      `📢 *Broadcast* _(Owner)_\n` +
+      `• All / Tier-specific / Active (last 30d)\n` +
+      `• Text + image, schedule + audit log\n\n` +
+
+      `🎟 *Promotions* _(Owner)_\n` +
+      `• /createpromo — Flat/Percent discount, min order, max uses, expiry\n` +
+      `• /listpromos /deletepromo`;
+
+    const part2 =
+      `🎫 *Support Tickets* _(Staff+)_\n` +
+      `• /tickets — Open + InProgress queue\n` +
+      `• /tickets all — include resolved/archived\n` +
+      `• Reply / Resolve / Assign / Archive / Urgent\n` +
+      `• 📜 Template library — quick reply\n` +
+      `• Negative sentiment auto-flag\n\n` +
+
+      `📈 *Analytics* _(Manager+)_\n` +
+      `• /analytics [today|yesterday|week|month] — revenue/profit dashboard\n` +
+      `• /analyticsai — 🤖 Gemini business report\n` +
+      `• /forecast — 7-day AI sales forecast\n` +
+      `• /sentimentreport — customer review sentiment\n` +
+      `• /exportdetail — CSV export (orders/transactions/users)\n\n` +
+
+      `🎰 *Spin & Referral* _(Owner)_\n` +
+      `• /setreftiers 1:2 6:3 16:5 — commission tiers\n` +
+      `• /reftiers — view current tiers\n` +
+      `• /togglereferral — pause/resume\n` +
+      `• /reffraud — fraud review\n\n` +
+
+      `📋 *Audit Logs* _(Manager+)_\n` +
+      `• Every admin action logged: who/what/when\n` +
+      `• Order status changes, balance adjustments, broadcasts\n\n` +
+
+      `🔧 *System* _(Owner)_\n` +
+      `• /sysinfo — memory, CPU, DB, cache, pending\n` +
+      `• /runbackup — manual AES-256 encrypted DB backup\n` +
+      `• /runcron — manual cron (archive/purge/audit)\n` +
+      `• /flushcache — clear in-memory cache\n` +
+      `• /systemhealth — gateway + system status\n` +
+      `• /checkhealth — 50-op load test\n` +
+      `• /setgateway <method> <Online|Busy|Offline>\n` +
+      `• /setbackupchan — backup destination channel\n` +
+      `• /setstalesupport <min> — stale order threshold\n\n` +
+
+      `🤖 *Auto-Systems* (24/7 background)\n` +
+      `• CronService — Daily 3AM MMT (archive, promo deactivate, screenshots)\n` +
+      `• BackupService — Daily 6AM MMT, AES-256 → channel\n` +
+      `• FlashSaleWatcher — auto start/stop sales\n` +
+      `• FeedbackWatcher — collect reviews after delivery\n` +
+      `• SentimentService — AI batch analysis + negative alerts\n` +
+      `• AntiSpam — rate limiting per user\n` +
+      `• Error Handler — crash → owner DM (5min cooldown)\n\n` +
+
+      `🏗 *Architecture*\n` +
+      `Telegraf 4.16 + Mongoose 8.x (MongoDB Atlas)\n` +
+      `Gemini 2.0 Flash — AI support + analytics + sentiment\n` +
+      `Cache — currency 15min, products 5min\n` +
+      `3-role RBAC + full audit trail\n\n` +
+      `_Tap any reply-keyboard button below to start._`;
+
+    await ctx.reply(part1, { parse_mode: 'Markdown' });
+    await ctx.reply(part2, { parse_mode: 'Markdown' });
   });
 
   // 🔙 Back to Main → switch reply keyboard back to user main menu
