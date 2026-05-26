@@ -23,8 +23,9 @@ const StyleService            = require('../services/StyleService');
 const SystemStatus            = require('../models/SystemStatus');
 const User                    = require('../models/User');
 const Product                 = require('../models/Product');
-const Nav                     = require('../services/NavigationService');
 const { config }              = require('../../config/settings');
+const { mainMenuKeyboard, adminMenuKeyboard } = require('../utils/keyboard');
+const { price }               = require('../utils/ui');
 
 // ── Attribution helper ────────────────────────────────────────────────────────
 
@@ -136,19 +137,36 @@ module.exports = function registerStart(bot) {
       return ctx.scene.enter('onboarding');
     }
 
-    // ── Send any deep-link notice ONLY (no duplicate welcome) ────────────────
-    const notice = (extraNote || '') + (referralNotice || '');
-    if (notice.trim()) {
-      await ctx.reply(notice, { parse_mode: 'Markdown', ...Markup.removeKeyboard() });
+    // ── Build single welcome panel with PERSISTENT REPLY KEYBOARD ────────────
+    const isAdmin = Number(ctx.from.id) === Number(config.bot.adminId);
+
+    let panel;
+    if (isAdmin) {
+      panel =
+        `🔧 *Admin Panel — Mental Gaming Store*\n` +
+        `👋 Welcome back, *${name}*!\n\n` +
+        `_Tap a button below to manage the store._`;
     } else {
-      // Clear any stale reply keyboard from older builds
-      await ctx.reply('🔄', Markup.removeKeyboard())
-        .then((m) => ctx.deleteMessage(m.message_id).catch(() => {}))
-        .catch(() => {});
+      const balanceKS   = ctx.user?.balanceKS   || 0;
+      const balanceCoin = ctx.user?.balanceCoin || 0;
+      panel =
+        `🎮 *Mental Gaming Store*\n` +
+        `━━━━━━━━━━━━━━━━━━━\n` +
+        `👋 Welcome, *${name}*!\n` +
+        `💰 Balance: \`${price(balanceKS)}\`\n` +
+        `💎 Coins: \`${balanceCoin.toLocaleString()} MC\`\n` +
+        `🌟 Tier: *${tier}*\n\n` +
+        `_Tap a button below to continue._`;
     }
 
-    // ── Single panel: admin gets admin_main, everyone else gets main ─────────
-    const isAdmin = Number(ctx.from.id) === Number(config.bot.adminId);
-    return Nav.navigate(ctx, isAdmin ? 'admin_main' : 'main', false);
+    const notice = (extraNote || '') + (referralNotice || '');
+    if (notice.trim()) {
+      panel += `\n${notice}`;
+    }
+
+    return ctx.reply(panel, {
+      parse_mode: 'Markdown',
+      ...(isAdmin ? adminMenuKeyboard() : mainMenuKeyboard()),
+    });
   });
 };
