@@ -10,7 +10,7 @@ const AuditLog = require('../models/AuditLog');
 const User = require('../models/User');
 const Promo = require('../models/Promo');
 const { price } = require('../utils/ui');
-const { adminMenuKeyboard } = require('../utils/keyboard');
+const { adminMenuKeyboard, mainMenuKeyboard } = require('../utils/keyboard');
 
 // ── Admin main nav — inline panel with live stats ─────────────────────────────
 
@@ -45,6 +45,121 @@ module.exports = function registerAdmin(bot) {
   // ── /admin command ─────────────────────────────────────────────────────────
   bot.command('admin', adminOnly(), async (ctx) => {
     await Nav.navigate(ctx, 'admin_main', false);
+  });
+
+  // ── Reply-keyboard handlers for admin menu buttons ─────────────────────────
+
+  // 📦 Manage Orders → show 10 most recent pending orders w/ action buttons
+  bot.hears('📦 Manage Orders', adminOnly(), async (ctx) => {
+    const orders = await Order.find({ status: { $in: ['Pending', 'Processing'] } })
+      .populate('userId', 'username telegramId')
+      .populate('productId', 'name')
+      .sort({ timestamp: -1 })
+      .limit(10);
+
+    if (!orders.length) {
+      return ctx.reply('✅ No pending or processing orders right now.');
+    }
+
+    const lines = orders.map((o, i) => {
+      const user    = o.userId?.username ? `@${o.userId.username}` : `ID:${o.userId?.telegramId}`;
+      const product = o.productId?.name || 'Unknown';
+      const icon    = o.status === 'Pending' ? '🟡' : '🔵';
+      return `${i + 1}. ${icon} ${user} — *${product}* — \`${price(o.amount)}\``;
+    });
+    await ctx.reply(
+      `📦 *Active Orders (${orders.length})*\n\n${lines.join('\n')}\n\n_Use /pendingorders to see full cards with action buttons._`,
+      { parse_mode: 'Markdown' }
+    );
+  });
+
+  // 🛍️ Manage Products → quick stats + command list
+  bot.hears('🛍️ Manage Products', adminOnly(), async (ctx) => {
+    const [total, active] = await Promise.all([
+      Product.countDocuments({}),
+      Product.countDocuments({ isActive: true }),
+    ]);
+    await ctx.reply(
+      `🛍️ *Manage Products*\n\n` +
+      `📊 Total: *${total}* | Active: *${active}*\n\n` +
+      `*Commands:*\n` +
+      `• /addproduct — add new product\n` +
+      `• /listproducts — list all products\n` +
+      `• /editproduct — edit existing\n` +
+      `• /deleteproduct — remove product\n` +
+      `• /toggleproduct — activate/deactivate\n` +
+      `• /flashsale — create flash sale\n` +
+      `• /addcodes — add digital codes`,
+      { parse_mode: 'Markdown' }
+    );
+  });
+
+  // 👥 Manage Users → first page of users
+  bot.hears('👥 Manage Users', adminOnly(), async (ctx) => {
+    const { users, total, totalPages } = await listUsers({ page: 1, limit: 10 });
+    if (!users.length) return ctx.reply('No users yet.');
+
+    const lines = users.map((u, i) =>
+      `${i + 1}. \`${u.telegramId}\` ${u.username ? `@${u.username}` : '—'} — ${u.membershipTier} ${u.isBlocked ? '🚫' : '🟢'}`
+    );
+    await ctx.reply(
+      `👥 *Users (${total} total)*\n\n${lines.join('\n')}\n\n` +
+      `_Search: /users <name|id>_\n` +
+      `_Actions: /ban /unban /warn /restrict /adjustbal /userinfo_`,
+      {
+        parse_mode: 'Markdown',
+        ...(totalPages > 1 ? Markup.inlineKeyboard([
+          [Markup.button.callback(`Page 1/${totalPages} ›`, 'users_page:2')],
+        ]) : {}),
+      }
+    );
+  });
+
+  // 💱 Manage Rates → show current rates + open rate manager
+  bot.hears('💱 Manage Rates', adminOnly(), async (ctx) => {
+    const rates = await getAllRates();
+    if (!rates.length) {
+      return ctx.reply('No exchange rates yet. Use /managerates to set up.', {
+        ...Markup.inlineKeyboard([[Markup.button.callback('✏️ Open Rate Manager', 'open_rate_manager')]]),
+      });
+    }
+    const lines = rates.map((r) =>
+      `• *${r.currencyCode}*: \`${parseFloat(r.rateToMMK.toFixed(4))}\` MMK  _(${r.source})_`
+    );
+    await ctx.reply(`💱 *Current Exchange Rates*\n\n${lines.join('\n')}`, {
+      parse_mode: 'Markdown',
+      ...Markup.inlineKeyboard([
+        [Markup.button.callback('✏️ Update Rates', 'open_rate_manager')],
+        [Markup.button.callback('🔄 Fetch Live', 'admin_fetch_rates')],
+      ]),
+    });
+  });
+
+  // 📢 Broadcast → enter broadcast scene
+  bot.hears('📢 Broadcast', adminOnly(), (ctx) => ctx.scene.enter('broadcast_scene'));
+
+  // 📋 Audit Logs → last 15 entries
+  bot.hears('📋 Audit Logs', adminOnly(), async (ctx) => {
+    const entries = await AuditLog.find({}).sort({ timestamp: -1 }).limit(15);
+    if (!entries.length) return ctx.reply('📋 No audit log entries yet.');
+
+    const lines = entries.map((e) => {
+      const ts  = new Date(e.timestamp).toLocaleString('en-GB', { timeZone: 'Asia/Rangoon' });
+      const det = Object.keys(e.details || {}).length
+        ? ` — ${JSON.stringify(e.details).slice(0, 60)}`
+        : '';
+      return `\`${ts}\` *${e.action}*\n  by \`${e.adminId}\` on ${e.targetType}${e.targetId ? ` \`${String(e.targetId).slice(-8)}\`` : ''}${det}`;
+    });
+
+    await ctx.reply(
+      `📋 *Audit Log (last ${entries.length})*\n\n${lines.join('\n\n')}`,
+      { parse_mode: 'Markdown' }
+    );
+  });
+
+  // 🔙 Back to Main → switch reply keyboard back to user main menu
+  bot.hears('🔙 Back to Main', async (ctx) => {
+    await ctx.reply('🏠 Back to main menu.', mainMenuKeyboard());
   });
 
   // ── Admin inline nav action handlers ──────────────────────────────────────
