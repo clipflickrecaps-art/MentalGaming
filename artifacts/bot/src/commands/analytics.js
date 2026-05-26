@@ -50,7 +50,7 @@ function buildAnalyticsText(report) {
 
   // Top products (max 5)
   const topProductLines = (products || []).slice(0, 5).map((p, i) =>
-    `  ${i + 1}\\. *${p.name.slice(0, 28)}* — ${p.count} orders — ${fmt(p.revenue)} KS`
+    `  ${i + 1}. *${p.name.slice(0, 28)}* — ${p.count} orders — ${fmt(p.revenue)} KS`
   ).join('\n') || '  _No orders in this period_';
 
   // Category breakdown (max 4)
@@ -84,19 +84,19 @@ function buildAnalyticsText(report) {
     `  Gross: *${fmt(revenue.grossRevenue)} KS*\n` +
     `  Refunds: −${fmt(revenue.refunds.total)} KS (${revenue.refunds.count}×)\n` +
     `  Net: *${fmt(revenue.netRevenue)} KS*\n` +
-    `  Est\\. Net Profit: *~${fmt(revenue.netProfit)} KS* (${revenue.estimatedMarginPct}%)\n\n` +
+    `  Est. Net Profit: *~${fmt(revenue.netProfit)} KS* (${revenue.estimatedMarginPct}%)\n\n` +
 
     `📦 *Orders*\n` +
     `  ✅ Completed: *${revenue.orderCount}*\n` +
     `  ❌ Cancelled: ${cancellation.cancelled} (${cancellation.rate}% rate)\n` +
-    `  💳 Top\\-ups: ${revenue.topups.count}× — ${fmt(revenue.topups.total)} KS\n` +
+    `  💳 Top-ups: ${revenue.topups.count}× — ${fmt(revenue.topups.total)} KS\n` +
     (peak ? `  🕐 Peak Hour: ${peak.hour}:00 (${peak.count} orders)\n` : '') + '\n' +
 
     `🏆 *Top Products*\n${topProductLines}\n\n` +
 
     `📂 *By Category*\n${categoryLines}\n\n` +
 
-    `💳 *Top\\-Up Methods*\n${gwLines}\n\n` +
+    `💳 *Top-Up Methods*\n${gwLines}\n\n` +
 
     `👥 *Users*\n` +
     `  New: *+${users.newUsers}*${growthStr}\n` +
@@ -154,7 +154,7 @@ module.exports = function registerAnalytics(bot) {
       await ctx.telegram.deleteMessage(waitMsg.chat.id, waitMsg.message_id).catch(() => {});
 
       await ctx.reply(text, {
-        parse_mode: 'MarkdownV2',
+        parse_mode: 'Markdown',
         ...Markup.inlineKeyboard([
           [
             Markup.button.callback('📅 Today',     'analytics:today'),
@@ -189,7 +189,7 @@ module.exports = function registerAnalytics(bot) {
       const text   = buildAnalyticsText(report);
 
       await ctx.editMessageText(text, {
-        parse_mode: 'MarkdownV2',
+        parse_mode: 'Markdown',
         ...Markup.inlineKeyboard([
           [
             Markup.button.callback('📅 Today',     'analytics:today'),
