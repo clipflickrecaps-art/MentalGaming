@@ -21,22 +21,38 @@ function geminiUrl(endpoint) {
 
 // ── Core Gemini call ──────────────────────────────────────────────────────────
 async function callGemini(systemPrompt, userPrompt, { maxTokens = 400, temperature = 0.7, history = [] } = {}) {
-  const contents = [
-    ...history,
-    { role: 'user', parts: [{ text: userPrompt }] },
-  ];
+  if (!userPrompt || !userPrompt.trim()) return null;
 
-  const { data } = await axios.post(
-    geminiUrl('generateContent'),
-    {
-      system_instruction: { parts: [{ text: systemPrompt }] },
-      contents,
-      generationConfig: { maxOutputTokens: maxTokens, temperature },
-    },
-    { headers: { 'Content-Type': 'application/json' }, timeout: 20000 }
+  // Sanitize history — Gemini requires alternating user/model with non-empty parts
+  const cleanHistory = (history || []).filter(
+    (m) => m && m.role && Array.isArray(m.parts) && m.parts.some((p) => p?.text?.trim())
   );
 
-  return data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || null;
+  const contents = [
+    ...cleanHistory,
+    { role: 'user', parts: [{ text: userPrompt.trim() }] },
+  ];
+
+  try {
+    const { data } = await axios.post(
+      geminiUrl('generateContent'),
+      {
+        system_instruction: { parts: [{ text: systemPrompt }] },
+        contents,
+        generationConfig: { maxOutputTokens: maxTokens, temperature },
+      },
+      { headers: { 'Content-Type': 'application/json' }, timeout: 20000 }
+    );
+
+    return data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || null;
+  } catch (err) {
+    // Surface the real Gemini error body so 400s aren't opaque
+    const body = err.response?.data;
+    const reason = body?.error?.message || body?.error?.status || err.message;
+    const status = err.response?.status || 'no-status';
+    console.error(`[AIService] Gemini ${status}: ${reason}`);
+    throw err;
+  }
 }
 
 // ── Store knowledge base (injected into every support prompt) ─────────────────
