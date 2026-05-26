@@ -15,6 +15,7 @@ const { buildMessage, formatDate } = require('../utils/ui');
 const { requireRole, isAnyAdmin } = require('../middlewares/adminCheck');
 const { auditLog } = require('../services/logger');
 const { mainMenuKeyboard } = require('../utils/keyboard');
+const { t } = require('../utils/i18n');
 const SupportTicket = require('../models/SupportTicket');
 
 const TOPIC_META = {
@@ -31,14 +32,14 @@ Nav.register({
   build: async (ctx, theme) => {
     const text = buildMessage(theme, [
       {
-        title: '💬 Customer Support',
+        title: t(ctx, 'support.title').replace(/\*/g, ''),
         lines: [
-          `🤖 AI Assistant available *24/7*`,
-          `👨 Human support: *9AM – 11PM* MMT`,
-          `⚡ AI responds instantly`,
+          t(ctx, 'support.ai_24_7'),
+          t(ctx, 'support.human_hours'),
+          t(ctx, 'support.instant'),
           ``,
-          `*Type /support to start a chat with our AI assistant.*`,
-          `It can help with orders, payments, game IDs, and more — and will escalate to a human if needed.`,
+          t(ctx, 'support.start_chat'),
+          t(ctx, 'support.start_desc'),
         ],
       },
     ]);

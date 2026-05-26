@@ -8,6 +8,7 @@ const { getCoinBonusRates } = require('../services/WalletService');
 const { getTierProgress, getTierConfig, formatProgressBar } = require('../services/MembershipService');
 const { Markup } = require('telegraf');
 const { mainMenuKeyboard } = require('../utils/keyboard');
+const { t } = require('../utils/i18n');
 const User = require('../models/User');
 
 function tierBadge(tier) {
@@ -22,10 +23,7 @@ Nav.register({
     // Fallback to direct DB lookup if middleware didn't attach user
     const user = ctx.user || (ctx.from?.id ? await User.findByTelegramId(ctx.from.id) : null);
     if (!user) {
-      return {
-        text: '❌ Could not load profile. Please type /start and try again.',
-        keyboard: mainMenuKeyboard(ctx),
-      };
+      return { text: t(ctx, 'profile.load_failed'), keyboard: mainMenuKeyboard(ctx) };
     }
 
     const balanceKS   = user.balanceKS   || 0;
@@ -44,57 +42,59 @@ Nav.register({
       const bar = `[${formatProgressBar(progress.progressPct / 100)}] ${progress.progressPct}%`;
       progressLines = [
         ``,
-        `📈 *Tier Progress:*`,
+        t(ctx, 'profile.tier_progress'),
         `${cfg.badge} → ${tierCfg[progress.nextTier].badge}`,
         `\`${bar}\``,
         `_${progress.message}_`,
       ];
     } else {
-      progressLines = [``, `🏆 *MAX TIER — Platinum!*`];
+      progressLines = [``, t(ctx, 'profile.max_tier')];
     }
 
     const restrictionLine = user.restrictedRights?.length > 0
-      ? `⛔ Restrictions: ${user.restrictedRights.join(', ')}`
+      ? `⛔ ${t(ctx, 'profile.restrictions')}: ${user.restrictedRights.join(', ')}`
       : null;
 
     const restrictionUntilLine = user.restrictedUntil && new Date() < new Date(user.restrictedUntil)
-      ? `⏳ Lifted: ${formatDate(user.restrictedUntil)}`
+      ? `⏳ ${t(ctx, 'profile.lifted')}: ${formatDate(user.restrictedUntil)}`
       : null;
 
     const discountPct = cfg?.discount || 0;
     const discountLine = discountPct > 0
-      ? `🏷 Tier Discount: *${discountPct}% off* all products`
-      : '🏷 Tier Discount: None (Silver)';
+      ? `🏷 ${t(ctx, 'profile.discount_label')}: *${discountPct}%* ${t(ctx, 'profile.discount_off')}`
+      : `🏷 ${t(ctx, 'profile.discount_label')}: ${t(ctx, 'profile.discount_none')}`;
+
+    const dayWord = streak !== 1 ? t(ctx, 'common.days') : t(ctx, 'common.day');
 
     const lines = [
-      `${theme.emoji.user} ${user.username ? `@${user.username}` : 'No username'}`,
-      `🆔 ID: ${theme.format.code(String(user.telegramId))}`,
-      `${theme.emoji.star} Tier: ${theme.format.bold(tierBadge(tier))}`,
+      `${theme.emoji.user} ${user.username ? `@${user.username}` : t(ctx, 'profile.no_username')}`,
+      `🆔 ${t(ctx, 'profile.id')}: ${theme.format.code(String(user.telegramId))}`,
+      `${theme.emoji.star} ${t(ctx, 'wallet.tier')}: ${theme.format.bold(tierBadge(tier))}`,
       ``,
-      `${theme.emoji.money} KS Balance: ${theme.format.bold(price(balanceKS))}`,
-      `${theme.emoji.coin} Mental Coins: ${theme.format.bold(balanceCoin.toLocaleString() + ' MC')}`,
-      `💼 Total Deposited: ${price(deposited)}`,
-      `🎁 Coin Bonus Rate: +${bonusPct}%`,
+      `${theme.emoji.money} ${t(ctx, 'wallet.ks_balance')}: ${theme.format.bold(price(balanceKS))}`,
+      `${theme.emoji.coin} ${t(ctx, 'wallet.coins')}: ${theme.format.bold(balanceCoin.toLocaleString() + ' MC')}`,
+      `💼 ${t(ctx, 'wallet.total_deposited')}: ${price(deposited)}`,
+      `🎁 ${t(ctx, 'wallet.bonus_rate')}: +${bonusPct}%`,
       discountLine,
       ``,
-      `🔥 Check-In Streak: *${streak} day${streak !== 1 ? 's' : ''}*`,
-      `📅 Total Check-Ins: *${user.totalCheckIns || 0}*`,
+      `🔥 ${t(ctx, 'profile.streak')}: *${streak} ${dayWord}*`,
+      `📅 ${t(ctx, 'profile.total_checkins')}: *${user.totalCheckIns || 0}*`,
       ...progressLines,
       ``,
-      `⚠️ Warnings: ${user.warningsCount || 0}/3`,
+      `⚠️ ${t(ctx, 'profile.warnings')}: ${user.warningsCount || 0}/3`,
       restrictionLine,
       restrictionUntilLine,
-      `📅 Joined: ${formatDate(user.joinDate)}`,
+      `📅 ${t(ctx, 'profile.joined')}: ${formatDate(user.joinDate)}`,
     ].filter(Boolean);
 
     lines.push(``);
-    lines.push(`_Commands:_`);
-    lines.push(`• /topup — Top Up Wallet`);
-    lines.push(`• /history — KS Transaction History`);
-    lines.push(`• /progress — Tier Progress`);
-    lines.push(`• /settings — Theme & Language`);
+    lines.push(`_${t(ctx, 'common.commands')}:_`);
+    lines.push(`• ${t(ctx, 'wallet.cmd_topup')}`);
+    lines.push(`• ${t(ctx, 'wallet.cmd_history')}`);
+    lines.push(`• ${t(ctx, 'profile.cmd_progress')}`);
+    lines.push(`• ${t(ctx, 'profile.cmd_settings')}`);
 
-    const text = buildMessage(theme, [{ title: '👤 My Profile', lines }]);
+    const text = buildMessage(theme, [{ title: t(ctx, 'profile.title'), lines }]);
 
     return { text, keyboard: mainMenuKeyboard(ctx) };
   },

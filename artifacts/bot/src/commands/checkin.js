@@ -18,6 +18,7 @@ const {
 } = require('../services/CheckInService');
 const { checkRestrictions } = require('../middlewares/checkRestrictions');
 const { price } = require('../utils/ui');
+const { t } = require('../utils/i18n');
 const User = require('../models/User');
 
 async function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
@@ -51,34 +52,35 @@ function streakBar(streak) {
 }
 
 // ── Result message ────────────────────────────────────────────────────────────
-function buildResultText(result) {
+function buildResultText(ctx, result) {
   const streakEmoji = result.streak >= 30 ? '🏆' : result.streak >= 14 ? '🏅' : result.streak >= 7 ? '🎉' : '🔥';
-  const streakText  = `${streakEmoji} *Streak: ${result.streak} day${result.streak !== 1 ? 's' : ''}!*`;
+  const dayWord = result.streak !== 1 ? t(ctx, 'common.days') : t(ctx, 'common.day');
+  const streakText  = `${streakEmoji} *${t(ctx, 'checkin.streak_label')}: ${result.streak} ${dayWord}!*`;
   const bar = streakBar(result.streak);
 
-  const brokenNote = result.isStreakBroken
-    ? `\n⚠️ _Your streak was reset. Start fresh from Day 1!_`
-    : '';
+  const brokenNote = result.isStreakBroken ? `\n${t(ctx, 'checkin.broken')}` : '';
 
   const milestoneNote = result.isMilestone && result.milestoneLabel
-    ? `\n\n🎊 *MILESTONE UNLOCKED!*\n${result.milestoneLabel}`
+    ? `\n\n${t(ctx, 'checkin.milestone')}\n${result.milestoneLabel}`
     : '';
 
-  const ksLine = result.ksReward > 0 ? `\n💰 *+${result.ksReward.toLocaleString()} KS* bonus!` : '';
+  const ksLine = result.ksReward > 0
+    ? `\n💰 *+${result.ksReward.toLocaleString()} KS* ${t(ctx, 'checkin.bonus')}!`
+    : '';
 
   const nextR = result.nextReward;
   const nextKs = nextR.ks > 0 ? ` + ${nextR.ks.toLocaleString()} KS` : '';
 
   return (
-    `✅ *Check-In Complete!*\n\n` +
+    `${t(ctx, 'checkin.complete')}\n\n` +
     `${streakText}\n` +
     `${bar}\n` +
     brokenNote +
-    `\n🪙 *+${result.coinReward} Mental Coins* earned!` +
+    `\n🪙 *+${result.coinReward} Mental Coins* ${t(ctx, 'checkin.earned')}!` +
     ksLine +
-    `\n💳 Coins Balance: *${result.user.balanceCoin.toLocaleString()} MC*` +
+    `\n💳 ${t(ctx, 'checkin.coin_balance')}: *${result.user.balanceCoin.toLocaleString()} MC*` +
     milestoneNote +
-    `\n\n_Tomorrow: *+${nextR.coins} MC*${nextKs}_`
+    `\n\n_${t(ctx, 'checkin.tomorrow')}: *+${nextR.coins} MC*${nextKs}_`
   );
 }
 
@@ -95,7 +97,7 @@ module.exports = function registerCheckIn(bot) {
 
   async function handleCheckIn(ctx) {
     const status = await getCheckInStatus(ctx.from.id);
-    if (!status) return ctx.reply('❌ Please /start first.');
+    if (!status) return ctx.reply(t(ctx, 'common.user_not_found'));
 
     if (status.alreadyCheckedIn) {
       const nextMidnight = new Date();
@@ -104,17 +106,18 @@ module.exports = function registerCheckIn(bot) {
       const hoursLeft = Math.ceil((nextMidnight - new Date()) / 3600000);
 
       const bar = streakBar(status.streak);
+      const dayWord = status.streak !== 1 ? t(ctx, 'common.days') : t(ctx, 'common.day');
       await ctx.reply(
-        `✅ *Already Checked In Today!*\n\n` +
-        `🔥 Current Streak: *${status.streak} day${status.streak !== 1 ? 's' : ''}*\n` +
+        `${t(ctx, 'checkin.already_today')}\n\n` +
+        `🔥 ${t(ctx, 'checkin.current_streak')}: *${status.streak} ${dayWord}*\n` +
         `${bar}\n\n` +
-        `⏳ Next check-in in: *~${hoursLeft}h*\n\n` +
-        `_Tomorrow's reward: *+${status.nextReward.coins} MC*${status.nextReward.ks > 0 ? ` + ${status.nextReward.ks} KS` : ''}_`,
+        `⏳ ${t(ctx, 'checkin.next_in')}: *~${hoursLeft}h*\n\n` +
+        `_${t(ctx, 'checkin.tomorrow_reward')}: *+${status.nextReward.coins} MC*${status.nextReward.ks > 0 ? ` + ${status.nextReward.ks} KS` : ''}_`,
         {
           parse_mode: 'Markdown',
           ...Markup.inlineKeyboard([
-            [Markup.button.callback('📅 Calendar',    'ci_calendar')],
-            [Markup.button.callback('📊 My Streak',   'ci_streak')],
+            [Markup.button.callback(t(ctx, 'checkin.calendar'),  'ci_calendar')],
+            [Markup.button.callback(t(ctx, 'checkin.my_streak'), 'ci_streak')],
           ]),
         }
       );
@@ -134,12 +137,12 @@ module.exports = function registerCheckIn(bot) {
 
       await ctx.telegram.editMessageText(
         msgRef.chatId, msgRef.messageId, undefined,
-        buildResultText(result),
+        buildResultText(ctx, result),
         {
           parse_mode: 'Markdown',
           ...Markup.inlineKeyboard([
-            [Markup.button.callback('📅 View Calendar', 'ci_calendar')],
-            [Markup.button.callback('📊 Full Streak',   'ci_streak')],
+            [Markup.button.callback(t(ctx, 'checkin.calendar'),  'ci_calendar')],
+            [Markup.button.callback(t(ctx, 'checkin.my_streak'), 'ci_streak')],
           ]),
         }
       ).catch(() => {});

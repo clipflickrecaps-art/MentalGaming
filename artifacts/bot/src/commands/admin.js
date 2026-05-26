@@ -686,16 +686,20 @@ module.exports = function registerAdmin(bot) {
     await ctx.answerCbQuery();
     const { users, total } = await listUsers({ filter: { isBlocked: true }, limit: 10 });
     if (!total) return ctx.reply('✅ No banned users.');
-    const lines = users.map((u) => `• \`${u.telegramId}\` ${u.username ? `@${u.username}` : '—'}`);
-    await ctx.reply(`🚫 *Banned Users (${total})*\n\n${lines.join('\n')}`, { parse_mode: 'Markdown' });
+    const esc2 = (s) => String(s || '').replace(/([_*`\[\]()~>#+=|{}.!\\-])/g, '\\$1');
+    const lines = users.map((u) => `• \`${u.telegramId}\` ${u.username ? `@${esc2(u.username)}` : '—'}`);
+    await ctx.reply(`🚫 *Banned Users (${total})*\n\n${lines.join('\n')}`, { parse_mode: 'Markdown' })
+      .catch(() => ctx.reply(`Banned Users (${total})\n\n${lines.join('\n').replace(/[*_`\\]/g,'')}`));
   });
 
   bot.action('users_warned', adminOnly(), async (ctx) => {
     await ctx.answerCbQuery();
     const { users, total } = await listUsers({ filter: { warningsCount: { $gt: 0 } }, limit: 10 });
     if (!total) return ctx.reply('✅ No users with warnings.');
-    const lines = users.map((u) => `• \`${u.telegramId}\` ${u.username ? `@${u.username}` : '—'} — ⚠️ ${u.warningsCount}/3`);
-    await ctx.reply(`⚠️ *Warned Users (${total})*\n\n${lines.join('\n')}`, { parse_mode: 'Markdown' });
+    const esc2 = (s) => String(s || '').replace(/([_*`\[\]()~>#+=|{}.!\\-])/g, '\\$1');
+    const lines = users.map((u) => `• \`${u.telegramId}\` ${u.username ? `@${esc2(u.username)}` : '—'} — ⚠️ ${u.warningsCount}/3`);
+    await ctx.reply(`⚠️ *Warned Users (${total})*\n\n${lines.join('\n')}`, { parse_mode: 'Markdown' })
+      .catch(() => ctx.reply(`Warned Users (${total})\n\n${lines.join('\n').replace(/[*_`\\]/g,'')}`));
   });
 
   bot.action('users_stats', adminOnly(), async (ctx) => {

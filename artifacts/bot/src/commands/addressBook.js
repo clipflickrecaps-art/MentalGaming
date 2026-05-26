@@ -8,6 +8,7 @@
 
 const { Markup } = require('telegraf');
 const { getEntries, saveEntry, deleteEntry, setDefault, formatEntry } = require('../services/AddressBookService');
+const { t } = require('../utils/i18n');
 const AddressBook = require('../models/AddressBook');
 const User = require('../models/User');
 
@@ -17,7 +18,7 @@ module.exports = function registerAddressBook(bot) {
     const entries = await getEntries(ctx.from.id);
     if (!entries.length) {
       return ctx.reply(
-        `📖 *Game ID Address Book*\n\nNo saved IDs yet.\n\nUse /saveid to save your first game account!\n_Example: /saveid MobileLegends 123456 9001 "My Main"_`,
+        `${t(ctx, 'gameids.title')}\n\n${t(ctx, 'gameids.empty')}\n\n_Example: /saveid MobileLegends 123456 9001 "My Main"_`,
         { parse_mode: 'Markdown' }
       );
     }
@@ -36,13 +37,15 @@ module.exports = function registerAddressBook(bot) {
       });
     }
 
+    const addBtn = ctx.user?.language === 'mm' ? '➕ ID အသစ်ထည့်' : '➕ Save New ID';
+    const delBtn = ctx.user?.language === 'mm' ? '🗑 ID ဖျက်'     : '🗑 Delete an ID';
     await ctx.reply(
-      `📖 *Saved Game IDs (${entries.length})*\n\n${lines.join('\n')}`,
+      `${t(ctx, 'gameids.title')} (${entries.length})\n\n${lines.join('\n')}`,
       {
         parse_mode: 'Markdown',
         ...Markup.inlineKeyboard([
-          [Markup.button.callback('➕ Save New ID', 'ab_start_save')],
-          [Markup.button.callback('🗑 Delete an ID', 'ab_start_delete')],
+          [Markup.button.callback(addBtn, 'ab_start_save')],
+          [Markup.button.callback(delBtn, 'ab_start_delete')],
         ]),
       }
     );

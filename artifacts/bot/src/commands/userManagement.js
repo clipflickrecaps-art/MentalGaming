@@ -22,6 +22,8 @@ const { price, formatDate } = require('../utils/ui');
 const { getTheme } = require('../services/ThemeService');
 const { checklist } = require('../utils/animations');
 
+const esc = (s) => String(s || '').replace(/([_*`\[\]()~>#+=|{}.!\\-])/g, '\\$1');
+
 // ── Resolve target from ctx (reply or args) ───────────────────────────────────
 function parseTarget(ctx) {
   if (ctx.message?.reply_to_message?.from) {
@@ -107,18 +109,18 @@ module.exports = function registerUserManagement(bot) {
 
     if (query) {
       const found = await searchUsers(query);
-      if (!found.length) return ctx.reply(`❌ No users found matching: ${query}`);
+      if (!found.length) return ctx.reply(`❌ No users found matching: ${esc(query)}`);
       const lines = found.map((u) =>
-        `• \`${u.telegramId}\` ${u.username ? `@${u.username}` : '_(no username)_'} — ${u.membershipTier} — ${u.isBlocked ? '🚫' : '🟢'}`
+        `• \`${u.telegramId}\` ${u.username ? `@${esc(u.username)}` : '_(no username)_'} — ${esc(u.membershipTier)} — ${u.isBlocked ? '🚫' : '🟢'}`
       );
-      return ctx.reply(`🔍 *Search: "${query}"* (${found.length} found)\n\n${lines.join('\n')}`, {
+      return ctx.reply(`🔍 *Search: "${esc(query)}"* (${found.length} found)\n\n${lines.join('\n')}`, {
         parse_mode: 'Markdown',
-      });
+      }).catch(() => ctx.reply(`Search: ${query} (${found.length} found)\n\n${lines.join('\n').replace(/[*_`]/g,'')}`));
     }
 
     const { users, total, totalPages } = await listUsers({ page: 1, limit: 10 });
     const lines = users.map((u, i) =>
-      `${i + 1}. \`${u.telegramId}\` ${u.username ? `@${u.username}` : '—'} — ${u.membershipTier} ${u.isBlocked ? '🚫' : '🟢'}`
+      `${i + 1}. \`${u.telegramId}\` ${u.username ? `@${esc(u.username)}` : '—'} — ${esc(u.membershipTier)} ${u.isBlocked ? '🚫' : '🟢'}`
     );
 
     await ctx.reply(
@@ -129,7 +131,7 @@ module.exports = function registerUserManagement(bot) {
           [Markup.button.callback(`Page 1/${totalPages} ›`, 'users_page:2')],
         ]),
       }
-    );
+    ).catch(() => ctx.reply(`Users (${total} total)\n\n${lines.join('\n').replace(/[*_`]/g,'')}`));
   });
 
   bot.action(/^users_page:(\d+)$/, adminOnly(), async (ctx) => {
@@ -137,7 +139,7 @@ module.exports = function registerUserManagement(bot) {
     await ctx.answerCbQuery();
     const { users, total, totalPages } = await listUsers({ page, limit: 10 });
     const lines = users.map((u, i) =>
-      `${(page - 1) * 10 + i + 1}. \`${u.telegramId}\` ${u.username ? `@${u.username}` : '—'} — ${u.membershipTier} ${u.isBlocked ? '🚫' : '🟢'}`
+      `${(page - 1) * 10 + i + 1}. \`${u.telegramId}\` ${u.username ? `@${esc(u.username)}` : '—'} — ${esc(u.membershipTier)} ${u.isBlocked ? '🚫' : '🟢'}`
     );
     const navBtns = [];
     if (page > 1) navBtns.push(Markup.button.callback(`‹ ${page - 1}`, `users_page:${page - 1}`));

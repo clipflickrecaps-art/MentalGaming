@@ -8,6 +8,7 @@ const Product = require('../models/Product');
 const CacheService = require('../services/CacheService');
 const { loadingMessage, resolveMessage } = require('../utils/animations');
 const { buildMessage, price, truncate } = require('../utils/ui');
+const { t } = require('../utils/i18n');
 
 function backRow() {
   return Nav.backButton();
@@ -48,10 +49,10 @@ Nav.register({
   build: async (ctx, theme) => {
     const text = buildMessage(theme, [
       {
-        title: '🛒 Game Store',
+        title: t(ctx, 'shop.title'),
         lines: [
-          `${theme.emoji.bullet} Browse by game or category.`,
-          `${theme.emoji.bullet} All prices shown in KS.`,
+          `${theme.emoji.bullet} ${t(ctx, 'shop.browse')}`,
+          `${theme.emoji.bullet} ${t(ctx, 'shop.prices_ks')}`,
         ],
       },
     ]);
@@ -73,8 +74,8 @@ function buildGameFolder(id, title, subfolders, description = '') {
     title,
     build: async (ctx, theme) => {
       const lines = description
-        ? [description, '', `${theme.emoji.bullet} Select a package:`]
-        : [`${theme.emoji.bullet} Select a package:`];
+        ? [description, '', `${theme.emoji.bullet} ${t(ctx, 'shop.select_package')}:`]
+        : [`${theme.emoji.bullet} ${t(ctx, 'shop.select_package')}:`];
       const text = buildMessage(theme, [{ title, lines }]);
       const rows = Nav.buildRows(subfolders.map((f) => Nav.folderButton(f.label, f.id)), 2);
       return { text, keyboard: Markup.inlineKeyboard([...rows, backRow()]) };
@@ -124,7 +125,7 @@ function buildProductFolder(id, title, category, parent) {
 
       if (!products.length) {
         return {
-          text: buildMessage(theme, [{ title, lines: [`${theme.emoji.warning} No products available.`] }]),
+          text: buildMessage(theme, [{ title, lines: [`${theme.emoji.warning} ${t(ctx, 'shop.no_products')}`] }]),
           keyboard: Markup.inlineKeyboard([backRow()]),
         };
       }
@@ -139,8 +140,8 @@ function buildProductFolder(id, title, category, parent) {
       const text = buildMessage(theme, [{
         title,
         lines: [
-          `${theme.emoji.bullet} ${products.length} package(s) available`,
-          `${theme.emoji.bullet} Tap to order`,
+          `${theme.emoji.bullet} ${products.length} ${t(ctx, 'shop.packages_available')}`,
+          `${theme.emoji.bullet} ${t(ctx, 'shop.tap_to_order')}`,
         ],
       }]);
 
@@ -188,25 +189,27 @@ module.exports = function registerShop(bot) {
 
     try {
       const product = await Product.findById(productId);
-      if (!product) return resolveMessage(ctx, ref, '❌ Product not found.');
+      if (!product) return resolveMessage(ctx, ref, t(ctx, 'shop.product_not_found'));
 
       const theme = require('../services/ThemeService').getTheme(ctx.user);
-      const stockLabel = product.stockCount === -1 ? '∞ Unlimited' : `${product.stockCount} left`;
+      const stockLabel = product.stockCount === -1
+        ? t(ctx, 'shop.stock_unlimited')
+        : `${product.stockCount} ${t(ctx, 'shop.stock_left')}`;
 
       const text = buildMessage(theme, [{
         title: product.name,
         lines: [
-          `${theme.emoji.folder} Category: ${product.category}`,
-          `🌍 Region: ${product.region}`,
-          `${theme.emoji.money} Price: ${theme.format.bold(price(product.finalPrice))}`,
-          `📦 Stock: ${stockLabel}`,
+          `${theme.emoji.folder} ${t(ctx, 'shop.category')}: ${product.category}`,
+          `🌍 ${t(ctx, 'shop.region')}: ${product.region}`,
+          `${theme.emoji.money} ${t(ctx, 'shop.price')}: ${theme.format.bold(price(product.finalPrice))}`,
+          `📦 ${t(ctx, 'shop.stock')}: ${stockLabel}`,
           product.description ? `\n📝 ${product.description}` : null,
         ],
       }]);
 
       await resolveMessage(ctx, ref, text, {
         ...Markup.inlineKeyboard([
-          [Markup.button.callback('🛒 Order Now', `order_start:${product._id}`)],
+          [Markup.button.callback(t(ctx, 'shop.order_now'), `order_start:${product._id}`)],
           Nav.backButton(),
         ]),
       });
