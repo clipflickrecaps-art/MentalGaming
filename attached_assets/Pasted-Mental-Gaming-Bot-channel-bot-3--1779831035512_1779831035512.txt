@@ -1,0 +1,78 @@
+Mental Gaming Bot
+
+channel တွေလဲ ရေးတဲ့ထဲပါတယ် မလား အခုဘာမှ မတွေ့ဘူး ငါထင်တယ် bot ရေးတုန်းက 3 ခုလား 4 ခုလားလို့ အာတာလဲ စစ်ပေးပါ။
+
+bot features တွေအကုန် admin panel bot ကနေ လုပ်လို့ရအောင်လုပ်ပေး ဒါလဲ ခနတိုင်းပြောနေရတယ်
+
+my profile နိပ်ရင် admin bot နဲ့ user bot မတူဘူးဖစ်နေတယ် ပြောချင်တာက admin acc မှာ တစ်မျ်ူး user bot မှာတစ်မျိုး userbot က error ထင်တယ် စစ်ပေးပါ
+
+user botမှာ check in button လဲ မပါဘူး။ check in rewards ကိုလဲ admin bot ကနေ စီမံလို့ရအောင်လုပ်ပေး
+
+myprofile မှာ စုပြုံပြီး မပြနဲ့ ကြည့်ကောင်းအောင် ခွဲပြပေး ui ကိုလှအောင်ပြင်ပေး 
+
+💰 Wallet button ကိုနိပ်ရင်လဲ တစ်ခါတစ်ခါ ai က ဝင်ဝင်လာတတ်တယ် အာတာပြင်ပေး
+
+🛍️ Manage Products  button မှာ folder အလိုက် product ထည့်လို့ရအောင်ပိုကောင်းအောင် ပြင်ပေး
+
+category ကို စိတ်ကြိုက် ထပ်ထည့်တာဖစ်ဖစ် ပြင်တာဖစ်ဖစ် ဖျက်တာဖစ်ဖစ် နာမည်ချိန်းတာဖစ်ဖစ် အကုန်စီမံလို့ရအောင်လုပ်ပါ။
+
+product ထည့်တဲ့အခါ တစ်ခါတည်း အများ ထည့်လို့ရအောင်ပါလုပ်ပေး
+
+english - Myanmar language က ပြောင်းလို့ပဲရသေးတာ စာတွေက မပြောင်းသေးဘူး။ bot တစ်ခုလုံးကိုပြောင်းပေး
+ဘာသာစကားရွေးတာကို bot start ပထမဆုံးအကြိမ်နိပ်ရင် အရင်ပြပေးပါ။
+
+နောက်ပီး အရင်ကပါတဲ့ bot စစ ခြင်း bot အကြောင်းပြောတဲ့ ဟာပါထည့်ပေး အခုပျောက်နေတယ် 
+
+wallet ကိုနိပ်လိုက်ရင် ❌ Could not load wallet. Please tap retry below. ပြနေတယ်
+
+admin bot မှာ အလုပ်လုပ်နေတဲ့  user view က  user bot မှာ အလုပ်မလုပ်ဘူးဖစ်နေတယ် admin only ပဲအလုပ်လုပ်နေတယ် ပြင်ပေးပါ။
+
+button တိုင်းမှာ back ခလုပိထည့်မယ် cancel လဲလိုရင်ထည့်မယ်
+
+Spin Rewards တွေက ကိုကြိုက်တာ ထည့်မရဘုးဖစ်နေတယ် ထည့်ရအောင် ပြင်ပေးပါ
+
+admin panel မှာ payment method ထည့်တာ မပါသေးဘူး စစ်ပီး ပြင်ပေး ပါ။
+
+user bot support မှာ ပါတဲ့ button 3 ခု 
+Get Ai Help , Order issue , Payment /wallet က တစ်ခုကိုနိပ်ရင် သုံးခုစလုံးနိပ်သလိုဖစ်နေတယ် ပြင်ပေးပါ
+
+
+ဒီကစ
+
+My profile မှာက အရမ်း များနေတယ် ထင်တယ် ပြတာ လိုတာလေး အရေးကြီးဆုံး ကို အလှလေး ပြပီး button လေးတွေနဲ့ ထပ်ခွဲပြချင်တယ်
+
+Spin wheel  မှာ rewards တွေပဲ ဖော်ပြမယ် user bot မှာ percentage တွေ မပြဘူး 
+spin wheel က rewards တွေကိုအသစ်ထည့်နိုင်အောင်ပါ လုပ်ပေးပါ။ အဟောင်းတွေပြင်တာတွေက လုပ်ပီးသားပါ
+
+admin bot ထဲက user button ထဲမှာပါတဲ့ user အခြေနေတွေကို admin ကိုကိုယ်တိုင် စီမံလို့ရအောင်လုပ်ပေး
+ဥပမာ - warning ရှိနေရင် ဖယ်ပေးတာတို့ warning ကို အကြိမ်အရေအတွက်တိုးတာ လျော့တာ rules တွေပြောင်းတာ အပြင် user ban / unban ပါ admin ကလုပ်လို့ရအောင်လုပ်မယ်
+
+add product ရဲ့ select category မှာ category အသစ်ထည့်လို့ရအောင် category ဖျက်လို့ရအောင် နာမည် ချိန်းလို့ရအောင် စသဖြင့်ပါလုပ်ပေး product code အရင်ပေး main folder ဆောက် အဲ့ထဲက sub folder  ခေါ် category လုပ် အာတာတွေကိုအကုန် admin bot ကနေလုပ်လို့ရအောင်လုပ်ပေး  product ထည့်ရင်လဲ အများ တစ်ခါတည်း ထည့်ရအောင်ပါလုပ်ပေး
+
+add product ကိုနိပ် catagory ကိုရွေးပြီးရင် buld add ရယ် single ရယ် ပါအောင်ရွေးပေး
+
+စ
+
+FAQ section မှာ back button မပါသေးဘူး
+user button မှာလဲ back button မပါဘူး
+admin bot ရဲ့ spin rewards ရဲ့ add reward နိပ်တာ ဘာမှ တက်မလာဘူး
+bulk add ကို အခုလို မလိုချင်ဘူး add product အတိုင်း folder ရွေးပြီးမှာ နောက်ဆုံး product name ရယ် price ရယ် တန်းထည့်တာပဲလိုချင်တယ်
+နောက်ပီး ဈေးတွက်တဲ့နေရာ - product အကုန် ဈေးတွက်စရာမလိုဘူး လိုတဲ့ product တွေအတွက်ပဲ ထည့်ပီး အဲ့ product rate အတိုင်းရောင်းမလား ကိုထည့်ထားတဲ့ဈေးအတိုင်းရောင်းမလားပါ ရွေးရအောင်လုပ်ပေး ။ 
+ဈေးတွက်တဲ့နေရာမှာ အရင်း အမြတ် ရောင်းဈေး ဝယ်ဈေး စသဖြင့်အကုန် ပါအောင်လုပ်မယ်
+
+inline keyboard button မဟုပဲ reply keyboard button အနေနဲ့ပဲထားပေး features တိုင်း back button  ထည့်ပေး
+
+admin bot မှာ အဟောင်း ui ဝင်ဝင်လာတယ် ပြင်ပေးပါ
+
+ဒီကစ 
+
+✅ Payment method added: WaveMoney 
+ဒါပီးရင် back or menu button ပါသင့်တယ် မပါဘူး 
+
+promotion channel လေးပါ ပါသင့်တယ် 
+
+bot အကြောင်း ဘယ်လို ဝယ်ရမယ်ဆိုတဲ့အကြောင်း
+bot features တွေအကြောင်း ကိုနေ့တိုင်း တင်ပေးမယ့် channel promotion တွေအကြောင်း ပါ auto channel ထဲ တင်ပေးမယ့် features 
+
+
+အိုကေ
