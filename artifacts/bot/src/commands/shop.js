@@ -13,6 +13,8 @@ function backRow() {
   return Nav.backButton();
 }
 
+const { mainMenuKeyboard } = require('../utils/keyboard');
+
 Nav.register({
   id: 'main',
   title: 'Main Menu',
@@ -32,17 +34,11 @@ Nav.register({
           `${theme.emoji.star} Tier: ${tier}`,
         ],
       },
-      { title: null, lines: ['Choose an option below:'] },
+      { title: null, lines: ['_Tap a button below to continue._'] },
     ]);
 
-    const keyboard = Markup.inlineKeyboard([
-      [Nav.itemButton('Shop',       'nav:go:shop',            '🛒'), Nav.itemButton('My Orders',  'my_orders',               '📦')],
-      [Nav.itemButton('Wallet',     'nav:go:wallet_view',     '💰'), Nav.itemButton('My Profile', 'nav:go:profile_view',      '👤')],
-      [Nav.itemButton('Spin Wheel', 'spin_wheel_start',       '🎰'), Nav.itemButton('Support',    'nav:go:support_view',      '💬')],
-      [Nav.itemButton('Settings',   'nav:go:settings_view',   '⚙️')],
-    ]);
-
-    return { text, keyboard };
+    // Reply keyboard (persistent buttons) — no inline buttons on the main menu
+    return { text, keyboard: mainMenuKeyboard() };
   },
 });
 

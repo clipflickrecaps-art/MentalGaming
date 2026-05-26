@@ -10,6 +10,7 @@ const AuditLog = require('../models/AuditLog');
 const User = require('../models/User');
 const Promo = require('../models/Promo');
 const { price } = require('../utils/ui');
+const { adminMenuKeyboard } = require('../utils/keyboard');
 
 // ── Admin main nav — inline panel with live stats ─────────────────────────────
 
@@ -29,18 +30,11 @@ Nav.register({
       `🟡 Pending Orders: *${pending}*\n` +
       `🔵 Processing: *${processing}*\n` +
       `🛍️ Active Products: *${activeProducts}*\n` +
-      `👥 Total Users: *${totalUsers}*`;
+      `👥 Total Users: *${totalUsers}*\n\n` +
+      `_Tap a button below to continue._`;
 
-    const keyboard = Markup.inlineKeyboard([
-      [Markup.button.callback('📊 Dashboard',     'admin_dashboard_action'), Markup.button.callback('📦 Orders',      'admin_orders_action')],
-      [Markup.button.callback('🛍️ Products',      'admin_products_action'), Markup.button.callback('👥 Users',       'admin_users_action')],
-      [Markup.button.callback('💰 Coins & Tiers', 'admin_coins_panel'),      Markup.button.callback('🎟 Promotions',  'admin_promos_action')],
-      [Markup.button.callback('🎰 Spin Rewards',  'admin_spin_panel'),       Markup.button.callback('💱 Rates',       'admin_rates_action')],
-      [Markup.button.callback('📢 Broadcast',     'admin_broadcast_action'), Markup.button.callback('📋 Audit Logs',  'admin_audit_action')],
-      [Markup.button.callback('👤 User View',     'admin_user_view')],
-    ]);
-
-    return { text, keyboard };
+    // Reply keyboard only — admin uses persistent buttons, not inline
+    return { text, keyboard: adminMenuKeyboard() };
   },
 });
 
