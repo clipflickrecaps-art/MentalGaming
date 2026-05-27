@@ -1,37 +1,51 @@
+import { useEffect } from "react";
 import { Switch, Route, Router as WouterRouter } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Toaster } from "@/components/ui/toaster";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { bootTelegram } from "@/lib/telegram";
+import Home from "@/pages/Home";
+import Shop from "@/pages/Shop";
+import ProductDetail from "@/pages/ProductDetail";
+import OrderPage from "@/pages/Order";
+import MyOrders from "@/pages/MyOrders";
+import Wallet from "@/pages/Wallet";
+import TopUp from "@/pages/TopUp";
+import Profile from "@/pages/Profile";
 import NotFound from "@/pages/not-found";
-import Home from "@/pages/home";
-import { useEffect } from "react";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: { retry: 1, refetchOnWindowFocus: false, staleTime: 30_000 },
+  },
+});
 
-function Router() {
+function Routes() {
   return (
     <Switch>
       <Route path="/" component={Home} />
+      <Route path="/shop" component={Shop} />
+      <Route path="/product/:id" component={ProductDetail} />
+      <Route path="/order/:id" component={OrderPage} />
+      <Route path="/orders" component={MyOrders} />
+      <Route path="/orders/:id" component={MyOrders} />
+      <Route path="/wallet" component={Wallet} />
+      <Route path="/topup" component={TopUp} />
+      <Route path="/profile" component={Profile} />
       <Route component={NotFound} />
     </Switch>
   );
 }
 
-function App() {
+export default function App() {
   useEffect(() => {
     document.documentElement.classList.add("dark");
+    bootTelegram();
   }, []);
 
   return (
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-          <Router />
-        </WouterRouter>
-        <Toaster />
-      </TooltipProvider>
+      <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+        <Routes />
+      </WouterRouter>
     </QueryClientProvider>
   );
 }
-
-export default App;

@@ -33,6 +33,11 @@ export async function getDb(): Promise<Db> {
   return _db;
 }
 
+export async function getClient(): Promise<MongoClient> {
+  if (!_client) await getDb();
+  return _client as MongoClient;
+}
+
 export async function getCollection<T extends object>(
   name: string
 ): Promise<Collection<T>> {

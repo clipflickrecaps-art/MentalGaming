@@ -170,6 +170,27 @@ module.exports = function registerStart(bot) {
       panel += `\n${notice}`;
     }
 
+    // ── Mini App WebApp button ────────────────────────────────────────────
+    const miniAppUrl =
+      process.env.MINI_APP_URL ||
+      (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}/` : null);
+
+    if (miniAppUrl) {
+      try {
+        await ctx.reply(
+          '✨ *Open the new Mini App store*',
+          {
+            parse_mode: 'Markdown',
+            ...Markup.inlineKeyboard([
+              [Markup.button.webApp('🛍 Open Mental Gaming Store', miniAppUrl)],
+            ]),
+          }
+        );
+      } catch (err) {
+        console.warn('[start] Mini App button failed:', err.message);
+      }
+    }
+
     return ctx.reply(panel, {
       parse_mode: 'Markdown',
       ...(isAdmin ? adminMenuKeyboard() : mainMenuKeyboard(ctx)),
