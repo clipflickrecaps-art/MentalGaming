@@ -138,7 +138,14 @@ async function sendProgressView(ctx) {
       `  🪙 *${Math.round((nextCfg.bonusRate || 0.015) * 100 * 10) / 10}%* ${t(ctx, 'progress.coin_bonus')}`;
   }
 
-  await ctx.reply(text + '\n\n_Use /topup to add funds._', { parse_mode: 'Markdown' });
+  const { Markup } = require('telegraf');
+  await ctx.reply(text, {
+    parse_mode: 'Markdown',
+    ...Markup.inlineKeyboard([
+      [Markup.button.callback('💰 Top Up', 'start_topup')],
+      [Markup.button.callback('🔙 Back',   'nav:go:profile_view')],
+    ]),
+  });
 }
 
 module.exports = function registerProfile(bot) {

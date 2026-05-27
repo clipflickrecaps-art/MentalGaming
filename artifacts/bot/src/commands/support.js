@@ -98,8 +98,11 @@ module.exports = function registerSupport(bot) {
 
     if (!tickets.length) {
       return ctx.reply(
-        `🎫 *My Support Tickets*\n\nNo tickets yet.\n\nUse /support to get help.`,
-        { parse_mode: 'Markdown' }
+        `🎫 *My Support Tickets*\n\nNo tickets yet.`,
+        {
+          parse_mode: 'Markdown',
+          ...Markup.inlineKeyboard([[Markup.button.callback('💬 Open Support', 'support_ai_start')]]),
+        }
       );
     }
 

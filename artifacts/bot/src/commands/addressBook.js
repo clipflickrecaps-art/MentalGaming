@@ -95,10 +95,55 @@ module.exports = function registerAddressBook(bot) {
   // ── Inline: start save flow ────────────────────────────────────────────────
   bot.action('ab_start_save', async (ctx) => {
     await ctx.answerCbQuery();
+    ctx.session.awaitingSaveId = true;
     await ctx.reply(
-      `📖 *Save a Game ID*\n\nUse:\n\`/saveid GameName GameID [ZoneID] [Nickname]\`\n\nExample:\n\`/saveid MobileLegends 123456 9001 MyMain\``,
-      { parse_mode: 'Markdown' }
+      `📖 *Save a Game ID*\n\nFormat: \`GameName GameID [ZoneID] [Nickname]\`\nExample: \`MobileLegends 123456 9001 MyMain\`\n\nType your entry now:`,
+      {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard([[Markup.button.callback('❌ Cancel', 'ab_cancel_save')]]),
+      }
     );
+  });
+
+  bot.action('ab_cancel_save', async (ctx) => {
+    await ctx.answerCbQuery('Cancelled');
+    ctx.session.awaitingSaveId = false;
+    await ctx.editMessageReplyMarkup({ inline_keyboard: [] }).catch(() => {});
+  });
+
+  // Capture free-form save input from inline button
+  bot.on('text', async (ctx, next) => {
+    if (!ctx.session?.awaitingSaveId) return next();
+    if (ctx.message?.text?.startsWith('/')) return next();
+    ctx.session.awaitingSaveId = false;
+
+    const parts = ctx.message.text.trim().match(/[^\s"']+|"([^"]*)"|\`([^`]*)\`/g)
+      ?.map((p) => p.replace(/^["'`]|["'`]$/g, '')) || [];
+    if (parts.length < 2) return ctx.reply('❌ Need at least Game and ID. Try again from 📖 My Game IDs.');
+
+    const [gameName, gameId, ...rest] = parts;
+    const hasZone = rest.length && /^\d+$/.test(rest[0]);
+    const zoneId   = hasZone ? rest[0] : null;
+    const nickname = rest[hasZone ? 1 : 0] || null;
+
+    try {
+      const entry = await saveEntry(ctx.from.id, { gameName, gameId, zoneId, nickname });
+      await ctx.reply(
+        `✅ Saved: *${entry.gameName}* — \`${entry.gameId}\`` +
+        (entry.zoneId ? ` (Zone ${entry.zoneId})` : ''),
+        {
+          parse_mode: 'Markdown',
+          ...Markup.inlineKeyboard([[Markup.button.callback('📖 My Game IDs', 'ab_view_all')]]),
+        }
+      );
+    } catch (err) {
+      await ctx.reply(`❌ ${err.message}`);
+    }
+  });
+
+  bot.action('ab_view_all', async (ctx) => {
+    await ctx.answerCbQuery();
+    return myIdsHandler(ctx);
   });
 
   // ── Inline: start delete flow ──────────────────────────────────────────────

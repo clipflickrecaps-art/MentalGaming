@@ -19,7 +19,41 @@ module.exports = function registerPromo(bot) {
     const { t } = require('../utils/i18n');
     await ctx.reply(
       `${t(ctx, 'promo.title')}\n\n${t(ctx, 'promo.instructions')}`,
-      { parse_mode: 'Markdown' }
+      {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard([
+          [Markup.button.callback('🎟 Enter Promo Code', 'promo_enter')],
+          [Markup.button.callback('🛒 Go to Shop',       'nav:go:shop')],
+        ]),
+      }
+    );
+  });
+
+  // Inline entry — ask user to type the code
+  bot.action('promo_enter', async (ctx) => {
+    await ctx.answerCbQuery();
+    ctx.session.awaitingPromoCode = true;
+    await ctx.reply('🎟 Type your promo code:', { ...Markup.forceReply() });
+  });
+
+  // Capture typed promo code from inline entry
+  bot.on('text', async (ctx, next) => {
+    if (!ctx.session?.awaitingPromoCode) return next();
+    if (ctx.message?.text?.startsWith('/')) return next();
+    ctx.session.awaitingPromoCode = false;
+    const code = ctx.message.text.trim().toUpperCase();
+    const result = await validatePromo(code, ctx.from.id, Infinity);
+    if (!result.valid) return ctx.reply(`❌ *${code}*: ${result.error}`, { parse_mode: 'Markdown' });
+    const p = result.promo;
+    const disc = p.discountType === 'Flat' ? `${price(p.value)} off` : `${p.value}% off`;
+    return ctx.reply(
+      `✅ *${p.code}* — *${disc}*` +
+      (p.minOrderAmount > 0 ? `\nMin order: ${price(p.minOrderAmount)}` : '') +
+      `\n\nApply this code at checkout.`,
+      {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard([[Markup.button.callback('🛒 Go to Shop', 'nav:go:shop')]]),
+      }
     );
   });
 
