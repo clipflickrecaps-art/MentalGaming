@@ -1,0 +1,576 @@
+Bot UI
+
+Act as a world-class Senior UI/UX Designer and Senior Full-Stack Telegram Mini App Developer.
+
+Build a complete Telegram Mini App for “Mental Gaming Store” using an Apple Vision Pro inspired UI style.
+
+The app must look premium, clean, futuristic, smooth, and production-ready. Do NOT use cyberpunk or heavy neon. Use Apple Vision Pro style: frosted glass, spatial depth, soft blur, floating panels, soft shadows, rounded cards, elegant typography, clean spacing, and smooth motion.
+
+Project Type:
+Telegram Bot + Telegram Mini App game top-up store.
+
+UI Style:
+- Apple Vision Pro inspired interface
+- Liquid glass / frosted glass panels
+- Spatial layered cards
+- Soft depth shadows
+- Dark graphite background
+- Blue and white accent
+- Premium clean gaming store look
+- Mobile-first Telegram Mini App layout
+- Smooth micro animations
+- One-hand friendly UX
+- No clutter
+- No aggressive neon
+- No cyberpunk
+
+Color Palette:
+- Background: #05070A / #0B0F17
+- Glass Panel: rgba(255,255,255,0.08)
+- Border: rgba(255,255,255,0.18)
+- Primary Accent: #007AFF
+- Secondary Accent: #5AC8FA
+- Text Primary: #FFFFFF
+- Text Secondary: #A1A1AA
+- Success: #34C759
+- Warning: #FFCC00
+- Danger: #FF3B30
+
+Typography:
+- Use clean modern font like Inter or SF Pro style
+- Big readable headings
+- Clear price hierarchy
+- Myanmar language support
+- English + Myanmar mixed UI support
+
+Core Pages:
+1. Home Dashboard
+2. Shop / Game Categories
+3. Product Detail
+4. Order Form
+5. Checkout
+6. Wallet
+7. Top Up
+8. My Orders
+9. Order Detail
+10. Saved Items
+11. Promotions / Flash Sale
+12. Notifications
+13. Profile
+14. Support Chat
+15. Admin Dashboard
+16. Admin Orders
+17. Admin Products
+18. Admin Payments
+19. Admin Users
+20. Admin Analytics
+
+Home Dashboard Requirements:
+- Top greeting using Telegram user name
+- Profile avatar from Telegram
+- Notification button
+- Premium wallet balance glass card
+- Mental Coin balance
+- Tier badge: Silver / Gold / Platinum
+- Quick action buttons:
+  - Shop
+  - Top Up
+  - My Orders
+  - Support
+- Live purchase activity card
+- Flash sale carousel
+- Popular games grid
+- Recent orders preview
+- Floating bottom navigation
+
+Shop Features:
+- Game categories:
+  - Mobile Legends
+  - Free Fire
+  - PUBG Mobile
+  - Genshin Impact
+  - Steam Wallet
+  - Razer Gold
+  - Valorant
+  - Gift Cards
+- Search products
+- Filter by category
+- Sort by price
+- Show live MMK price
+- Show discount badge
+- Show stock status
+- Favorite / saved products
+
+Product Detail:
+- Product image
+- Product name
+- Region / server info
+- Package list
+- Price in MMK
+- Discount price
+- Delivery time
+- Instructions
+- Buy Now button
+- Save button
+
+Order Flow:
+- User selects product package
+- User enters required game information:
+  - Game ID
+  - Zone ID / Server ID
+  - Username if needed
+  - Phone number if needed
+- Validate required fields
+- Show order summary
+- Allow payment by:
+  - Wallet Balance
+  - Mental Coins
+  - Manual Payment Screenshot
+- Create order
+- Show order status:
+  - Pending
+  - Processing
+  - Success
+  - Cancelled
+  - Refunded
+
+Wallet Features:
+- Show MMK balance
+- Show Mental Coins
+- Show tier
+- Wallet transaction history
+- Top up button
+- Transfer history
+- Spending history
+- Reward history
+
+Top Up Features:
+- Payment methods:
+  - KPay
+  - Wave Pay
+  - AYA Pay
+  - CB Pay
+- Show payment account info
+- User enters amount
+- User uploads payment screenshot
+- Create top-up request
+- Status:
+  - Pending
+  - Approved
+  - Rejected
+- Admin approves and balance updates automatically
+
+Orders Features:
+- My Orders page
+- Filter:
+  - All
+  - Pending
+  - Processing
+  - Success
+  - Cancelled
+- Order detail page
+- Reorder button
+- Contact support button
+- Copy Order ID button
+
+Profile Features:
+- Telegram user profile
+- User ID
+- Username
+- Wallet balance
+- Mental Coins
+- Tier
+- Total orders
+- Saved items
+- Language switch
+- Theme setting
+- Logout / clear session
+
+Promotion Features:
+- Flash sale
+- Discount coupon
+- Daily reward
+- Referral reward
+- Tier reward
+- Limited-time offers
+
+Support Features:
+- FAQ
+- Contact admin
+- Order issue report
+- Payment issue report
+- Auto-reply support bot
+- Send ticket to admin
+
+Telegram Bot Integration:
+The Mini App must work exactly with Telegram Bot behavior.
+
+Telegram Bot Commands:
+- /start
+- /shop
+- /wallet
+- /orders
+- /topup
+- /support
+- /profile
+- /admin
+
+Bot Behavior:
+- /start sends welcome message with “Open Store” WebApp button
+- /shop opens Mini App shop page
+- /wallet opens wallet page
+- /orders opens order history page
+- /topup opens top-up page
+- /support opens support page
+- Bot sends notification when:
+  - Order created
+  - Order processing
+  - Order success
+  - Order cancelled
+  - Top-up approved
+  - Top-up rejected
+  - Admin sends message
+  - Flash sale starts
+
+Telegram Mini App Requirements:
+- Use Telegram WebApp SDK
+- Read initData securely
+- Verify Telegram user authentication on backend
+- Use Telegram theme params if available
+- Use MainButton where useful
+- Use BackButton for nested pages
+- Use HapticFeedback for important actions
+- Use popup confirmation before order submission
+- Use Telegram user photo and name
+- Must be fully responsive inside Telegram mobile app
+
+Backend Features:
+- User authentication with Telegram initData verification
+- User database
+- Product database
+- Category database
+- Order database
+- Wallet database
+- Transaction database
+- Payment request database
+- Notification database
+- Admin log database
+- Coupon database
+- Flash sale database
+
+Admin Dashboard:
+- Admin login by Telegram ID
+- Overview stats:
+  - Total sales
+  - Total orders
+  - Pending orders
+  - Pending top-ups
+  - Today revenue
+  - Active users
+- Manage orders
+- Approve / reject top-up requests
+- Update order status
+- Manage products
+- Manage categories
+- Manage prices
+- Manage currency rate
+- Manage flash sales
+- Manage coupons
+- Manage users
+- Adjust wallet balance
+- View audit logs
+- Send broadcast message to users
+
+Security:
+- Verify Telegram initData on backend
+- Admin-only routes protected by Telegram admin ID
+- Validate all user inputs
+- Prevent duplicate orders
+- Prevent fake payment screenshot approval
+- Store audit logs for admin actions
+- Secure environment variables
+- Never expose bot token in frontend
+
+Database Models:
+User:
+- telegramId
+- username
+- firstName
+- lastName
+- photoUrl
+- walletBalance
+- mentalCoins
+- tier
+- role
+- createdAt
+
+Product:
+- name
+- category
+- image
+- packages
+- price
+- discountPrice
+- stock
+- isActive
+- deliveryTime
+
+Order:
+- orderId
+- userId
+- productId
+- package
+- gameId
+- zoneId
+- amount
+- paymentMethod
+- status
+- adminNote
+- createdAt
+
+TopUpRequest:
+- requestId
+- userId
+- amount
+- paymentMethod
+- screenshotUrl
+- status
+- adminNote
+- createdAt
+
+Transaction:
+- userId
+- type
+- amount
+- description
+- referenceId
+- createdAt
+
+UI Components:
+- VisionGlassCard
+- FloatingBottomNav
+- WalletBalanceCard
+- GameCategoryCard
+- ProductPackageCard
+- OrderStatusBadge
+- PaymentMethodCard
+- TopUpUploadCard
+- AdminStatsCard
+- NotificationSheet
+- ConfirmModal
+- LoadingSkeleton
+- EmptyState
+- SuccessAnimation
+
+Animation:
+- Soft card float
+- Smooth page transition
+- Glass blur transition
+- Button press haptic feedback
+- Order success animation
+- Wallet balance count-up animation
+- Bottom nav smooth indicator
+
+Design Quality:
+- Must look like a real premium app
+- Must not look like a template
+- Must be clean and easy to use
+- Must support Myanmar users
+- Must be suitable for game top-up store business
+- Must be fast and lightweight
+
+Recommended Tech Stack:
+Frontend:
+- Next.js
+- TypeScript
+- Tailwind CSS
+- Framer Motion
+- Telegram WebApp SDK
+
+Backend:
+- Node.js
+- Express or NestJS
+- MongoDB
+- Mongoose
+- Telegraf
+- Cloudinary or local upload for payment screenshots
+
+Deployment:
+- Frontend: Vercel
+- Backend: Railway / Render / VPS
+- Database: MongoDB Atlas
+
+Final Output:
+Create the full Telegram Mini App UI and backend structure with production-ready code.
+Include:
+1. Complete page structure
+2. Reusable components
+3. Telegram WebApp integration
+4. Telegram bot commands
+5. Backend API routes
+6. Database models
+7. Admin dashboard
+8. Order system
+9. Wallet system
+10. Top-up approval system
+11. Notification system
+12. Clean Apple Vision Pro inspired UI
+
+IMPORTANT:
+Do not build only the visible UI.
+
+The Telegram Bot and Mini App must contain ALL hidden operational features that are usually required in a production gaming store.
+
+Build both:
+1. User-facing features
+2. Internal bot/admin/business features
+
+Missing Functional Requirements:
+
+USER SYSTEM
+- Daily login reward
+- Referral & invite system
+- Referral commission
+- Loyalty points → Mental Coins
+- Tier upgrade engine
+- Cashback system
+- Saved addresses / profiles
+- Multiple game profiles
+- Device/session management
+- Notification preferences
+- Language system
+- Account ban / unban
+
+ORDER ENGINE
+- Auto order queue
+- Manual order assignment
+- Retry failed orders
+- Cancel & refund workflow
+- Partial refund
+- Auto timeout
+- Duplicate order prevention
+- Order notes
+- Internal order tags
+- Priority processing
+- Emergency stop
+
+PAYMENT SYSTEM
+- Screenshot OCR preparation
+- Duplicate payment detection
+- Payment reconciliation
+- Pending cleanup
+- Auto expiration
+- Multi-currency support
+- Currency history
+- Exchange rate management
+- Wallet freeze
+- Transaction rollback
+
+MENTAL COIN SYSTEM
+- Earn coins
+- Spend coins
+- Coin history
+- Coin expiry
+- Tier bonus
+- Reward campaign
+- Coin conversion rules
+
+PRODUCT SYSTEM
+- Dynamic pricing
+- Scheduled pricing
+- Flash sale scheduling
+- Product bundles
+- Stock control
+- Visibility control
+- Product archive
+- Recommended products
+- Recently viewed
+
+PROMOTION ENGINE
+- Coupon rules
+- Expiry rules
+- Referral campaign
+- Event campaign
+- Scheduled campaign
+- First purchase bonus
+- Spin reward
+- Seasonal sale
+
+ADMIN SYSTEM
+- Role permissions
+- Super Admin
+- Moderator
+- Finance
+- Support
+- Audit logs
+- Activity logs
+- Admin notes
+- Admin action history
+- Dashboard widgets
+- Export CSV
+- Search users
+- Search orders
+
+SUPPORT SYSTEM
+- Ticket system
+- Ticket assignment
+- SLA tracking
+- Internal comments
+- Support priority
+- User satisfaction rating
+
+AUTOMATION
+- Auto notify users
+- Scheduled announcements
+- Scheduled pricing update
+- Auto wallet updates
+- Auto reward distribution
+- Auto order completion
+- Daily reports
+
+ANALYTICS
+- Revenue chart
+- Conversion tracking
+- Retention
+- Cohort analytics
+- Product performance
+- Top users
+- Fraud analytics
+
+SECURITY
+- Rate limiting
+- Session validation
+- CSRF protection
+- Upload validation
+- Admin IP restriction
+- Audit trail
+- Fraud flags
+- Secure file storage
+
+TELEGRAM ADVANCED FEATURES
+- Deep linking
+- Inline keyboard
+- WebApp open by page
+- Broadcast messaging
+- User segmentation
+- Callback handling
+- Group admin alerts
+- Scheduled Telegram notifications
+- Webhook support
+- Polling fallback
+
+DEVELOPER FEATURES
+- Environment config
+- Feature flags
+- Logging
+- Error monitoring
+- Health check
+- Backup restore
+- Database migration
+- Modular architecture
+
+Final Rule:
+Nothing should exist only inside Telegram Bot.
+Every bot feature must have matching Mini App flow, admin flow, database support, and API endpoint.
+Design the UX before implementation.
+Output production-ready architecture.
