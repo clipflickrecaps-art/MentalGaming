@@ -54,82 +54,57 @@ module.exports = function registerAdmin(bot) {
 
   // ── Reply-keyboard handlers for admin menu buttons ─────────────────────────
 
-  // 📦 Manage Orders → show 10 most recent pending orders w/ action buttons
+  // 📦 Manage Orders → inline panel
   bot.hears('📦 Manage Orders', adminOnly(), async (ctx) => {
-    const orders = await Order.find({ status: { $in: ['Pending', 'Processing'] } })
-      .populate('userId', 'username telegramId')
-      .populate('productId', 'name')
-      .sort({ timestamp: -1 })
-      .limit(10);
-
-    if (!orders.length) {
-      return ctx.reply('✅ No pending or processing orders right now.');
-    }
-
-    const lines = orders.map((o, i) => {
-      const user    = o.userId?.username ? `@${o.userId.username}` : `ID:${o.userId?.telegramId}`;
-      const product = o.productId?.name || 'Unknown';
-      const icon    = o.status === 'Pending' ? '🟡' : '🔵';
-      return `${i + 1}. ${icon} ${user} — *${product}* — \`${price(o.amount)}\``;
-    });
+    const [pending, processing] = await Promise.all([
+      Order.countDocuments({ status: 'Pending' }),
+      Order.countDocuments({ status: 'Processing' }),
+    ]);
     await ctx.reply(
-      `📦 *Active Orders (${orders.length})*\n\n${lines.join('\n')}\n\n_Use /pendingorders to see full cards with action buttons._`,
-      { parse_mode: 'Markdown' }
+      `📦 *Order Management*\n\n🟡 Pending: *${pending}*\n🔵 Processing: *${processing}*`,
+      {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard([
+          [Markup.button.callback('🟡 View Pending', 'admin_pending_orders')],
+          [Markup.button.callback('📋 All Orders',   'admin_all_orders')],
+          [Markup.button.callback('🔙 Back',         'nav:go:admin_main')],
+        ]),
+      }
     );
   });
 
-  // 🛍️ Manage Products → quick stats + command list
+  // 🛍️ Manage Products → inline panel (no commands shown)
   bot.hears('🛍️ Manage Products', adminOnly(), async (ctx) => {
     const [total, active] = await Promise.all([
       Product.countDocuments({}),
       Product.countDocuments({ isActive: true }),
     ]);
     await ctx.reply(
-      `🛍️ *Manage Products*\n\n` +
-      `📊 Total: *${total}* | Active: *${active}*\n\n` +
-      `*Commands:*\n` +
-      `• /addproduct — add new product\n` +
-      `• /listproducts — list all products\n` +
-      `• /editproduct — edit existing\n` +
-      `• /deleteproduct — remove product\n` +
-      `• /toggleproduct — activate/deactivate\n` +
-      `• /flashsale — create flash sale\n` +
-      `• /addcodes — add digital codes`,
-      { parse_mode: 'Markdown' }
+      `🛍️ *Product Management*\n\n📦 Total: *${total}* | ✅ Active: *${active}* | 🔴 Inactive: *${total - active}*`,
+      {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard([
+          [Markup.button.callback('📋 List Products', 'pm_list_products')],
+          [Markup.button.callback('➕ Add Product',   'admin_product_add')],
+          [Markup.button.callback('⚡ Flash Sale',     'pm_flashsale_help')],
+          [Markup.button.callback('🎁 Add Codes',     'pm_addcodes_help')],
+          [Markup.button.callback('🔙 Back',          'nav:go:admin_main')],
+        ]),
+      }
     );
   });
 
-  // 👥 Manage Users → first page of users
+  // 👥 Manage Users → inline panel
   bot.hears('👥 Manage Users', adminOnly(), async (ctx) => {
-    try {
-      const { users, total, totalPages } = await listUsers({ page: 1, limit: 10 });
-      if (!users.length) return ctx.reply('No users yet.');
-
-      // Escape Markdown special chars so usernames with _ * ` [ don't break parsing
-      const esc = (s) => String(s || '').replace(/([_*`\[\]()~>#+=|{}.!\\-])/g, '\\$1');
-
-      const lines = users.map((u, i) => {
-        const handle = u.username ? `@${esc(u.username)}` : '—';
-        const tier   = esc(u.membershipTier || 'Silver');
-        return `${i + 1}. \`${u.telegramId}\` ${handle} — ${tier} ${u.isBlocked ? '🚫' : '🟢'}`;
-      });
-
-      await ctx.reply(
-        `👥 *Users (${total} total)*\n\n${lines.join('\n')}\n\n` +
-        `Search: /users <name|id>\n` +
-        `Actions: /ban /unban /warn /restrict /adjustbal /userinfo`,
-        {
-          parse_mode: 'Markdown',
-          ...(totalPages > 1 ? Markup.inlineKeyboard([
-            [Markup.button.callback(`Page 1/${totalPages} ›`, 'users_page:2')],
-          ]) : {}),
-        }
-      );
-    } catch (err) {
-      console.error('[Admin] Manage Users failed:', err);
-      // Fallback: plain text without parse_mode in case escaping still misses something
-      await ctx.reply(`❌ Manage Users error: ${err.message}\n\nUse /users <name|id> to search.`);
-    }
+    await ctx.reply(`👥 *User Management*\n\nChoose an action:`, {
+      parse_mode: 'Markdown',
+      ...Markup.inlineKeyboard([
+        [Markup.button.callback('📋 All Users', 'users_page:1')],
+        [Markup.button.callback('🚫 Banned',    'users_banned'), Markup.button.callback('⚠️ Warned', 'users_warned')],
+        [Markup.button.callback('📊 Stats',     'users_stats')],
+        [Markup.button.callback('🔙 Back',      'nav:go:admin_main')],
+      ]),
+    });
   });
 
   // 💱 Manage Rates → show current rates + open rate manager
@@ -170,7 +145,10 @@ module.exports = function registerAdmin(bot) {
 
     await ctx.reply(
       `📋 *Audit Log (last ${entries.length})*\n\n${lines.join('\n\n')}`,
-      { parse_mode: 'Markdown' }
+      {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard([[Markup.button.callback('🔙 Back', 'nav:go:admin_main')]]),
+      }
     );
   });
 
@@ -206,7 +184,9 @@ module.exports = function registerAdmin(bot) {
     }).sort({ createdAt: -1 }).limit(10);
 
     if (!tickets.length) {
-      return ctx.reply('✅ No open tickets right now.\n\n_Use /tickets all to see resolved ones._', { parse_mode: 'Markdown' });
+      return ctx.reply('✅ No open tickets right now.', {
+        ...Markup.inlineKeyboard([[Markup.button.callback('🔙 Back', 'nav:go:admin_main')]]),
+      });
     }
 
     const priorityBadge = { Normal: '🟡', High: '🟠', Urgent: '🔴' };
@@ -217,10 +197,19 @@ module.exports = function registerAdmin(bot) {
       return `${badge} \`${t.ticketId}\` — ${t.topic} — ${userTag}${assigned} _(${t.status})_`;
     });
 
+    const ticketButtons = tickets.slice(0, 5).map((t) =>
+      [Markup.button.callback(`📩 ${t.ticketId}`, `ticket_view:${t.ticketId}`)]
+    );
+
     await ctx.reply(
-      `🎫 *Open Tickets (${tickets.length})*\n\n${lines.join('\n')}\n\n` +
-      `_Use /tickets to see full cards with Reply/Resolve/Assign buttons._`,
-      { parse_mode: 'Markdown' }
+      `🎫 *Open Tickets (${tickets.length})*\n\n${lines.join('\n')}`,
+      {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard([
+          ...ticketButtons,
+          [Markup.button.callback('🔙 Back', 'nav:go:admin_main')],
+        ]),
+      }
     );
   });
 
@@ -676,6 +665,41 @@ module.exports = function registerAdmin(bot) {
           [Markup.button.callback(p.isActive ? '🔴 Deactivate' : '✅ Activate', `ap_toggle:${p._id}`)],
           [Markup.button.callback('🗑 Delete', `ap_delete_ask:${p._id}`)],
           [Markup.button.callback('🔙 Products List', 'pm_list_products')],
+        ]),
+      }
+    );
+  });
+
+  // ── Flash sale / digital codes — help cards with Back ─────────────────────
+  bot.action('pm_flashsale_help', adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    const active = await Product.find({ isActive: true }).sort({ category: 1 }).limit(8);
+    const list = active.map((p) =>
+      `• \`${p._id}\` — ${p.name} (${p.finalPrice?.toLocaleString() || '?'} KS)`
+    ).join('\n') || '_No active products yet._';
+    await ctx.reply(
+      `⚡ *Flash Sale Setup*\n\n` +
+      `Format:\n\`/flashsale <productId> <salePrice> <durationHours>\`\n\n` +
+      `Example:\n\`/flashsale abc123 2500 4\`\n\n` +
+      `*Active products:*\n${list}`,
+      {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard([[Markup.button.callback('🔙 Back', 'admin_products_action')]]),
+      }
+    );
+  });
+
+  bot.action('pm_addcodes_help', adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    await ctx.reply(
+      `🎁 *Add Digital Codes*\n\n` +
+      `Format:\n\`/addcodes <productId> code1 code2 code3\`\n\n` +
+      `Each code separated by space.\nTap *List Products* to find the productId.`,
+      {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard([
+          [Markup.button.callback('📋 List Products', 'pm_list_products')],
+          [Markup.button.callback('🔙 Back',          'admin_products_action')],
         ]),
       }
     );
