@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Copy, Check } from "lucide-react";
+import { Copy, Check, Upload, X, Image as ImageIcon } from "lucide-react";
 import { Layout } from "@/components/Layout";
 import { Glass } from "@/components/Glass";
 import { Skeleton } from "@/components/EmptyState";
@@ -17,13 +17,18 @@ const METHODS = [
   { id: "CBPay",   label: "CB Pay" },
 ] as const;
 
+const MAX_FILE_MB = 6;
+
 export default function TopUpPage() {
   const [, navigate] = useLocation();
   const qc = useQueryClient();
   const [amount, setAmount] = useState<number>(10000);
   const [method, setMethod] = useState<typeof METHODS[number]["id"]>("KPay");
-  const [reference, setReference] = useState("");
   const [copied, setCopied] = useState<string | null>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
+  const [fileError, setFileError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const pmQ = useQuery({
     queryKey: ["payment-methods"],
@@ -31,10 +36,17 @@ export default function TopUpPage() {
   });
 
   const mut = useMutation({
-    mutationFn: () =>
-      api.post<{ requestId: string; message: string }>("/topups", {
-        amount, paymentMethod: method, reference,
-      }),
+    mutationFn: () => {
+      if (!file) throw new ApiError("Please upload your payment screenshot", 400);
+      const form = new FormData();
+      form.append("amount", String(amount));
+      form.append("paymentMethod", method);
+      form.append("screenshot", file, file.name);
+      return api.postForm<{ requestId: string; txId: string; message: string }>(
+        "/topups",
+        form
+      );
+    },
     onSuccess: (data) => {
       haptic("success");
       qc.invalidateQueries({ queryKey: ["wallet"] });
@@ -50,6 +62,31 @@ export default function TopUpPage() {
     },
   });
 
+  function pickFile(f: File | null) {
+    setFileError(null);
+    if (!f) { setFile(null); setPreview(null); return; }
+    if (!/^image\/(png|jpe?g|webp)$/i.test(f.type)) {
+      setFileError("Only PNG, JPEG, or WebP images allowed");
+      return;
+    }
+    if (f.size > MAX_FILE_MB * 1024 * 1024) {
+      setFileError(`Image too large (max ${MAX_FILE_MB} MB)`);
+      return;
+    }
+    haptic("light");
+    setFile(f);
+    const url = URL.createObjectURL(f);
+    setPreview(url);
+  }
+
+  function clearFile() {
+    haptic("light");
+    setFile(null);
+    if (preview) URL.revokeObjectURL(preview);
+    setPreview(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
   function copyText(t: string, id: string) {
     haptic("light");
     navigator.clipboard?.writeText(t).then(() => {
@@ -58,14 +95,16 @@ export default function TopUpPage() {
     });
   }
 
-  // Filter payment methods to currently selected gateway label if matched
   const matched = pmQ.data?.methods.filter((m) =>
     m.label.toLowerCase().includes(method.replace("Pay", "").toLowerCase())
   ) ?? [];
 
+  const canSubmit = amount >= 1000 && !!file && !mut.isPending;
+
   return (
     <Layout title="Top Up" showBack showNav={false}>
       <div className="space-y-4 pb-32">
+        {/* Amount */}
         <Glass className="p-4">
           <div className="text-xs font-medium text-muted-foreground mb-2">Amount (KS)</div>
           <div className="text-3xl font-bold">
@@ -95,6 +134,7 @@ export default function TopUpPage() {
           </div>
         </Glass>
 
+        {/* Payment method */}
         <div>
           <div className="text-xs font-medium text-muted-foreground mb-2 px-1">Payment method</div>
           <div className="grid grid-cols-2 gap-2">
@@ -114,6 +154,7 @@ export default function TopUpPage() {
           </div>
         </div>
 
+        {/* Account info */}
         {pmQ.isLoading ? (
           <Skeleton className="h-24" />
         ) : matched.length > 0 ? (
@@ -141,29 +182,78 @@ export default function TopUpPage() {
           </Glass>
         )}
 
+        {/* Screenshot upload */}
         <Glass className="p-4">
-          <div className="text-xs font-medium text-muted-foreground mb-1">Your reference (optional)</div>
+          <div className="text-xs font-medium text-muted-foreground mb-2">
+            Payment screenshot <span className="text-rose-300">*</span>
+          </div>
+
           <input
-            value={reference}
-            onChange={(e) => setReference(e.target.value)}
-            placeholder="Payment txn ID, sender phone, note…"
-            className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 outline-none focus:border-primary text-sm"
-            data-testid="input-reference"
+            ref={fileInputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            className="hidden"
+            onChange={(e) => pickFile(e.target.files?.[0] ?? null)}
+            data-testid="input-screenshot"
           />
+
+          {preview ? (
+            <div className="relative rounded-2xl overflow-hidden border border-white/10">
+              <img
+                src={preview}
+                alt="Payment screenshot preview"
+                className="w-full max-h-80 object-contain bg-black/40"
+              />
+              <button
+                onClick={clearFile}
+                className="pressable absolute top-2 right-2 glass-strong rounded-full h-9 w-9 flex items-center justify-center"
+                data-testid="button-clear-screenshot"
+                aria-label="Remove screenshot"
+              >
+                <X className="h-4 w-4" />
+              </button>
+              <div className="absolute bottom-2 left-2 right-12 text-[11px] glass-strong rounded-lg px-2 py-1 truncate">
+                <ImageIcon className="inline h-3 w-3 mr-1 -mt-0.5" />
+                {file?.name} · {((file?.size ?? 0) / 1024).toFixed(0)} KB
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="pressable w-full glass border border-dashed border-white/15 rounded-2xl py-8 flex flex-col items-center justify-center gap-2 text-sm text-muted-foreground"
+              data-testid="button-upload-screenshot"
+            >
+              <Upload className="h-6 w-6" />
+              <div className="font-medium text-foreground">Upload payment screenshot</div>
+              <div className="text-[11px]">PNG / JPG / WebP · max {MAX_FILE_MB} MB</div>
+            </button>
+          )}
+
+          {fileError && (
+            <div className="mt-2 text-xs text-rose-300" data-testid="text-file-error">
+              {fileError}
+            </div>
+          )}
         </Glass>
 
         <Glass className="p-3 text-xs text-muted-foreground leading-relaxed">
-          After paying, send the screenshot to the bot in Telegram. An admin will review and credit your wallet — usually within minutes.
+          Your screenshot is sent securely to the admin for review. Most top-ups
+          are approved within minutes.
         </Glass>
 
+        {/* Submit */}
         <div className="fixed inset-x-0 bottom-0 z-40 px-4 pb-[max(16px,env(safe-area-inset-bottom))] pt-3 bg-gradient-to-t from-background to-transparent">
           <button
-            disabled={amount < 1000 || mut.isPending}
+            disabled={!canSubmit}
             onClick={() => mut.mutate()}
             className="pressable w-full bg-primary text-white rounded-2xl py-4 font-semibold disabled:opacity-40"
             data-testid="button-submit-topup"
           >
-            {mut.isPending ? "Submitting…" : `Submit top-up of ${ks(amount)}`}
+            {mut.isPending
+              ? "Submitting…"
+              : !file
+                ? "Upload screenshot to continue"
+                : `Submit top-up of ${ks(amount)}`}
           </button>
         </div>
       </div>

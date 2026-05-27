@@ -1,7 +1,31 @@
+import crypto from "node:crypto";
 import { Router, type IRouter, type Request, type Response } from "express";
 import { ObjectId, type Filter, type WithId } from "mongodb";
+import multer from "multer";
 import { getClient, getCollection } from "../lib/mongodb";
 import { telegramAuth, type StoreUser } from "../middlewares/telegramAuth";
+import { sendPhoto } from "../lib/telegramApi";
+import { logger } from "../lib/logger";
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 6 * 1024 * 1024 }, // 6 MB — Telegram photo cap
+  fileFilter: (_req, file, cb) => {
+    if (/^image\/(png|jpe?g|webp)$/i.test(file.mimetype)) cb(null, true);
+    else cb(new Error("Only PNG, JPEG, or WebP images allowed"));
+  },
+});
+
+function md5Hex(s: string): string {
+  return crypto.createHash("md5").update(s).digest("hex");
+}
+
+function adminChatId(): number | null {
+  const raw = process.env["ADMIN_ID"];
+  if (!raw) return null;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : null;
+}
 
 const router: IRouter = Router();
 router.use(telegramAuth);
@@ -52,8 +76,32 @@ interface TxDoc {
   status: "Pending" | "Completed" | "Rejected";
   paymentMethod: string | null;
   description?: string;
+  note?: string;
+  txId?: string;
+  screenshotUrl?: string | null;
+  screenshotHash?: string | null;
   createdAt?: Date;
   timestamp?: Date;
+}
+
+function shortCodeFor(method: string): string {
+  const m = method.toUpperCase();
+  if (m === "KPAY" || m === "KBZPAY") return "KPAY";
+  if (m === "WAVE" || m === "WAVEPAY") return "WAVE";
+  if (m === "AYA" || m === "AYAPAY") return "AYA";
+  if (m === "CB" || m === "CBPAY") return "CB";
+  return m;
+}
+
+async function ensureUniqueTxId(
+  txs: Awaited<ReturnType<typeof getCollection<TxDoc>>>
+): Promise<string> {
+  for (let i = 0; i < 5; i++) {
+    const id = "TX" + crypto.randomBytes(6).toString("hex").toUpperCase();
+    const existing = await txs.findOne({ txId: id });
+    if (!existing) return id;
+  }
+  throw new Error("Could not generate unique txId");
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -414,49 +462,151 @@ router.get("/wallet", async (req: Request, res: Response) => {
 });
 
 // ── POST /topups ───────────────────────────────────────────────────────────
-// body: { amount, paymentMethod, reference? }
-// Creates a Pending Topup transaction. Admin approves in bot.
+// multipart/form-data: { amount, paymentMethod, screenshot (file) }
+// Forwards screenshot to admin via Bot API (gets a Telegram file_id), then
+// creates a Pending Topup transaction matching the bot's own format. Admin
+// approval is handled by the existing bot `topup_approve:<txId>` callback.
 
-router.post("/topups", async (req: Request, res: Response) => {
-  const u = asUser(req);
-  const body = req.body as {
-    amount?: number;
-    paymentMethod?: string;
-    reference?: string;
-  };
-  const amount = Number(body.amount);
-  const method = String(body.paymentMethod || "").trim();
-  if (!Number.isFinite(amount) || amount < 1000) {
-    return res.status(400).json({ error: "Minimum top-up is 1,000 KS" });
+router.post(
+  "/topups",
+  upload.single("screenshot"),
+  async (req: Request, res: Response) => {
+    const u = asUser(req);
+    const body = req.body as {
+      amount?: string | number;
+      paymentMethod?: string;
+    };
+    const file = req.file;
+
+    const amount = Number(body.amount);
+    const methodRaw = String(body.paymentMethod || "").trim();
+    const shortCode = shortCodeFor(methodRaw);
+
+    if (!Number.isFinite(amount) || amount < 1000) {
+      return res.status(400).json({ error: "Minimum top-up is 1,000 KS" });
+    }
+    if (amount > 5_000_000) {
+      return res
+        .status(400)
+        .json({ error: "Maximum top-up is 5,000,000 KS. Contact support." });
+    }
+    if (!["KPAY", "WAVE", "AYA", "CB"].includes(shortCode)) {
+      return res.status(400).json({ error: "Invalid payment method" });
+    }
+    if (!file) {
+      return res.status(400).json({ error: "Payment screenshot is required" });
+    }
+
+    const admin = adminChatId();
+    if (!admin) {
+      logger.error("ADMIN_ID is not configured — cannot forward top-up proof");
+      return res
+        .status(500)
+        .json({ error: "Payment proof routing not configured" });
+    }
+
+    const txs = await getCollection<TxDoc>("transactions");
+
+    // Prevent multiple pending top-ups per user (matches bot behaviour).
+    const pending = await txs.findOne({
+      userId: u._id,
+      type: "Topup",
+      status: "Pending",
+    });
+    if (pending) {
+      return res.status(409).json({
+        error:
+          "You already have a pending top-up. Wait for it to be processed.",
+      });
+    }
+
+    // Forward photo to admin first — Telegram returns a stable file_id we
+    // store on the tx. Hash of the file_id is the fraud fingerprint.
+    let fileId: string;
+    let adminMessageId: number | null = null;
+    try {
+      const txIdPreview = "TX" + crypto.randomBytes(6).toString("hex").toUpperCase();
+      const caption =
+        `🆕 *Mini App Top-Up Request*\n\n` +
+        `👤 User: ${u.first_name || u.username || u.telegramId} ` +
+        `(\`${u.telegramId}\`)\n` +
+        `💰 Amount: *${amount.toLocaleString()} KS*\n` +
+        `💳 Method: *${shortCode}*\n` +
+        `🧾 Ref: \`${txIdPreview}\`\n\n` +
+        `_Tap a button below to process._`;
+
+      const sent = await sendPhoto({
+        chatId: admin,
+        photo: file.buffer,
+        filename: file.originalname || "screenshot.jpg",
+        contentType: file.mimetype,
+        caption,
+        parseMode: "Markdown",
+        inlineKeyboard: [
+          [{ text: "✅ Approve", callback_data: `topup_approve:${txIdPreview}` }],
+          [{ text: "❌ Reject", callback_data: `topup_reject:${txIdPreview}` }],
+          [
+            {
+              text: "💬 Ask for Info",
+              callback_data: `topup_askinfo:${txIdPreview}`,
+            },
+          ],
+        ],
+      });
+      fileId = sent.fileId;
+      adminMessageId = sent.messageId;
+
+      // Duplicate / fraud check using Telegram's file_id (same logic as bot).
+      const hash = md5Hex(fileId);
+      const existing = await txs.findOne({
+        $or: [{ screenshotUrl: fileId }, { screenshotHash: hash }],
+      });
+      if (existing) {
+        const sameUser = existing.userId.toString() === u._id.toString();
+        return res.status(409).json({
+          error: sameUser
+            ? "You've already submitted this exact screenshot."
+            : "This screenshot was already used. Admin has been notified.",
+        });
+      }
+
+      const now = new Date();
+      await txs.insertOne({
+        _id: new ObjectId(),
+        userId: u._id,
+        type: "Topup",
+        wallet: "KS",
+        amount,
+        balanceBefore: u.balanceKS,
+        balanceAfter: u.balanceKS,
+        status: "Pending",
+        paymentMethod: shortCode,
+        screenshotUrl: fileId,
+        screenshotHash: hash,
+        txId: txIdPreview,
+        note: "Awaiting admin approval (Mini App)",
+        createdAt: now,
+        timestamp: now,
+      });
+
+      return res.json({
+        requestId: txIdPreview,
+        txId: txIdPreview,
+        status: "Pending",
+        message:
+          "Top-up request submitted! An admin will review your screenshot — usually within minutes.",
+      });
+    } catch (err) {
+      logger.error(
+        { err, adminMessageId },
+        "Failed to forward top-up screenshot"
+      );
+      return res
+        .status(502)
+        .json({ error: "Could not deliver screenshot to admin. Please retry." });
+    }
   }
-  if (!["KPay", "WavePay", "AYAPay", "CBPay"].includes(method)) {
-    return res.status(400).json({ error: "Invalid payment method" });
-  }
-
-  const txs = await getCollection<TxDoc>("transactions");
-  const now = new Date();
-  const ins = await txs.insertOne({
-    _id: new ObjectId(),
-    userId: u._id,
-    type: "Topup",
-    wallet: "KS",
-    amount,
-    balanceBefore: u.balanceKS,
-    balanceAfter: u.balanceKS,
-    status: "Pending",
-    paymentMethod: method,
-    description: body.reference?.toString().slice(0, 80) || "Mini App top-up",
-    createdAt: now,
-    timestamp: now,
-  });
-
-  return res.json({
-    requestId: ins.insertedId.toString(),
-    status: "Pending",
-    message:
-      "Top-up request submitted. Send your payment screenshot to the bot to speed up approval.",
-  });
-});
+);
 
 // ── GET /payment-methods ───────────────────────────────────────────────────
 
