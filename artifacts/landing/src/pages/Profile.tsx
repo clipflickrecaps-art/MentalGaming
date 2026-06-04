@@ -1,6 +1,6 @@
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronRight, Wallet as WalletIcon, ShoppingBag, LogOut, HelpCircle, Crown } from "lucide-react";
+import { ChevronRight, Wallet as WalletIcon, ShoppingBag, LogOut, HelpCircle, Crown, Gamepad2, ShieldCheck } from "lucide-react";
 import { Layout } from "@/components/Layout";
 import { Glass } from "@/components/Glass";
 import { Skeleton } from "@/components/EmptyState";
@@ -43,18 +43,9 @@ export default function ProfilePage() {
             <Glass className="divide-y divide-white/5">
               <NavRow href="/wallet" icon={<WalletIcon className="h-4 w-4" />} label="Wallet & transactions" />
               <NavRow href="/orders" icon={<ShoppingBag className="h-4 w-4" />} label="My orders" />
-              <NavRow
-                href="#"
-                icon={<HelpCircle className="h-4 w-4" />}
-                label="Help & support"
-                onClick={(e) => {
-                  e.preventDefault();
-                  haptic("light");
-                  const tg = getTg();
-                  if (tg) tg.openTelegramLink("https://t.me/mentalgamingstore_support");
-                  else window.open("https://t.me/mentalgamingstore_support", "_blank");
-                }}
-              />
+              <NavRow href="/play" icon={<Gamepad2 className="h-4 w-4" />} label="Spin, check-in & referral" />
+              <NavRow href="/support" icon={<HelpCircle className="h-4 w-4" />} label="Help & support" />
+              <NavRow href="/admin" icon={<ShieldCheck className="h-4 w-4" />} label="Admin Panel" />
               <NavRow
                 href="#"
                 icon={<LogOut className="h-4 w-4" />}

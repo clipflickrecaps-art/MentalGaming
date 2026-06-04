@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { Sparkles, Wallet, ArrowRight, Flame, ChevronRight } from "lucide-react";
+import { Sparkles, Wallet, ArrowRight, Flame, ChevronRight, Gamepad2 } from "lucide-react";
 import { Layout } from "@/components/Layout";
 import { Glass } from "@/components/Glass";
 import { Skeleton } from "@/components/EmptyState";
@@ -70,6 +70,32 @@ export default function HomePage() {
             <div className="text-sm text-white/80">Connecting to Telegram…</div>
           )}
         </Glass>
+
+        {/* Play & Earn shortcuts */}
+        <section data-testid="section-play">
+          <div className="flex items-center justify-between mb-2 px-1">
+            <h2 className="text-sm font-semibold flex items-center gap-1.5">
+              <Gamepad2 className="h-4 w-4 text-primary" /> Play & Earn
+            </h2>
+            <Link href="/play" className="text-xs text-primary flex items-center">
+              All <ChevronRight className="h-3 w-3" />
+            </Link>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            {[
+              { href: "/spin",    emoji: "🎰", label: "Spin" },
+              { href: "/checkin", emoji: "📅", label: "Check-In" },
+              { href: "/referral",emoji: "🤝", label: "Referral" },
+            ].map((item) => (
+              <Link key={item.href} href={item.href}>
+                <Glass className="pressable p-3 flex flex-col items-center gap-1 text-center">
+                  <span className="text-2xl">{item.emoji}</span>
+                  <span className="text-xs font-medium">{item.label}</span>
+                </Glass>
+              </Link>
+            ))}
+          </div>
+        </section>
 
         {/* Flash sale */}
         {flashQ.data && flashQ.data.products.length > 0 && (

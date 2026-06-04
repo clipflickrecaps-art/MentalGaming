@@ -49,9 +49,10 @@ async function request<T>(
 }
 
 export const api = {
-  get:  <T>(p: string) => request<T>(p),
-  post: <T>(p: string, body: unknown) => request<T>(p, { method: "POST", body: JSON.stringify(body) }),
-  postForm: <T>(p: string, form: FormData) => request<T>(p, { method: "POST", body: form }),
+  get:      <T>(p: string)                    => request<T>(p),
+  post:     <T>(p: string, body: unknown)     => request<T>(p, { method: "POST",  body: JSON.stringify(body) }),
+  patch:    <T>(p: string, body: unknown)     => request<T>(p, { method: "PATCH", body: JSON.stringify(body) }),
+  postForm: <T>(p: string, form: FormData)    => request<T>(p, { method: "POST",  body: form }),
 };
 
 // ── Types ─────────────────────────────────────────────────────────────────

@@ -1,14 +1,14 @@
 import { Link, useLocation } from "wouter";
-import { Home, Store, Wallet as WalletIcon, ShoppingBag, User as UserIcon } from "lucide-react";
+import { Home, Store, Gamepad2, Wallet as WalletIcon, User as UserIcon } from "lucide-react";
 import { cn } from "@/lib/format";
 import { haptic } from "@/lib/telegram";
 
 const tabs = [
-  { href: "/",         label: "Home",   icon: Home },
-  { href: "/shop",     label: "Shop",   icon: Store },
-  { href: "/orders",   label: "Orders", icon: ShoppingBag },
-  { href: "/wallet",   label: "Wallet", icon: WalletIcon },
-  { href: "/profile",  label: "Me",     icon: UserIcon },
+  { href: "/",        label: "Home",   icon: Home },
+  { href: "/shop",    label: "Shop",   icon: Store },
+  { href: "/play",    label: "Play",   icon: Gamepad2 },
+  { href: "/wallet",  label: "Wallet", icon: WalletIcon },
+  { href: "/profile", label: "Me",     icon: UserIcon },
 ] as const;
 
 export function BottomNav() {
