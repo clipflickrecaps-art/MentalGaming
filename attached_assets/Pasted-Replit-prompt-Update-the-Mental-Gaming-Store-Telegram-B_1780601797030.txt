@@ -1,0 +1,629 @@
+Replit prompt
+
+Update the Mental Gaming Store Telegram Bot, Admin Panel, and Mini App with a smart catalog-based product management and order system.
+
+PRIMARY GOAL
+
+Build a scalable catalog-driven store system that supports:
+- Different checkout requirements per catalog
+- Smart product management
+- Bulk product creation
+- Quantity purchases
+- Partial delivery and refunds
+- Review campaigns and rewards
+- Flexible image display
+- Consistent behavior between Telegram Bot and Mini App
+
+==================================================
+1. CATALOG-BASED CUSTOMER FIELD SYSTEM
+==================================================
+
+Do not hardcode Game ID or any specific field.
+
+Create a dynamic catalog-level checkout field system.
+
+Examples:
+
+Mobile Legends Catalog
+- Game ID (Required)
+- Server ID (Required)
+
+PUBG Catalog
+- Player ID (Required)
+
+Gmail Products Catalog
+- Gmail Address (Required)
+- Recovery Email (Optional)
+
+Gift Card Catalog
+- No customer fields required
+
+Admin must be able to:
+
+- Add field
+- Edit field
+- Remove field
+- Reorder field
+
+Field settings:
+
+- Label
+- Field Type
+  - Text
+  - Number
+  - Email
+  - Textarea
+- Required / Optional
+- Placeholder
+- Help Text
+
+==================================================
+2. PRODUCT INHERITANCE
+==================================================
+
+Products automatically inherit catalog settings.
+
+Admin should NOT need to configure checkout fields for every product.
+
+Support product override:
+
+- Use Catalog Defaults
+- Add Extra Fields
+- Override Fields
+- Disable Fields
+
+==================================================
+3. CHECKOUT VALIDATION
+==================================================
+
+When user purchases a product:
+
+- Show fields automatically based on catalog
+- Validate required fields
+- Prevent order creation if required fields are missing
+- Save all customer-provided data with the order
+
+Bot and Mini App must behave exactly the same.
+
+==================================================
+4. ADMIN ORDER DISPLAY
+==================================================
+
+New Order notifications must show:
+
+- Product
+- Catalog
+- Order ID
+- Customer
+- Quantity
+- Unit Price
+- Total Price
+- Customer Delivery Data
+
+Example:
+
+Product: 86 Diamonds
+Catalog: Mobile Legends
+Game ID: 123456789
+Server ID: 1234
+
+Add buttons:
+
+- Copy Field
+- Copy All Delivery Data
+
+When admin opens an order or completes an order,
+show the same delivery information again.
+
+==================================================
+5. SMART PRODUCT MANAGEMENT
+==================================================
+
+Admin panel must manage:
+
+- Product Name
+- Description
+- Price
+- Catalog
+- Status
+- Sort Order
+- Product Image
+- Product Metadata
+
+Catalog defaults:
+
+- Default Description
+- Default Checkout Fields
+- Default Delivery Notes
+- Default Product Image
+- Default Settings
+
+Products inherit these automatically.
+
+==================================================
+6. PRODUCT IMAGE SYSTEM
+==================================================
+
+Allow admin to upload/edit product images directly from Telegram Bot admin tools.
+
+Add image display mode:
+
+- Mini App Only
+- Bot Only
+- Both
+- Hidden
+
+Default:
+
+Mini App Only
+
+Mini App:
+- Show product images
+- Show category images
+- Show product cards
+
+Bot:
+- Prefer lightweight text view
+- Do not force image display
+
+==================================================
+7. BULK PRODUCT IMPORT
+==================================================
+
+Add Bulk Add Products.
+
+Admin selects a catalog and pastes:
+
+💎 86 - 5000 ks
+💎 172 - 10000 ks
+💎 257 - 15000 ks
+💎 343 - 20000 ks
+...
+
+System automatically parses:
+
+- Product Name
+- Amount
+- Price
+- Currency
+- Catalog
+- Sort Order
+
+Before saving:
+
+Show preview table.
+
+Allow editing before confirm.
+
+==================================================
+8. CATALOG PRODUCT DISPLAY
+==================================================
+
+Mini App flow:
+
+Show catalogs first.
+
+After catalog selection:
+
+Show products inside that catalog.
+
+Products must appear in admin-defined order.
+
+==================================================
+9. QUANTITY PURCHASE SYSTEM
+==================================================
+
+Allow users to purchase multiple quantities of the same product.
+
+Example:
+
+86 Diamonds
+
+Quantity:
+1
+2
+3
+4
+5
+
+System calculates:
+
+Unit Price × Quantity
+
+Example:
+
+86 Diamonds × 5
+
+Total:
+25,000 KS
+
+Also display:
+
+Total Diamonds:
+430
+
+==================================================
+10. PARTIAL DELIVERY & REFUND
+==================================================
+
+Support partial fulfillment.
+
+Example:
+
+User orders:
+86 Diamonds × 5
+
+Admin delivers:
+4
+
+Remaining:
+1
+
+Admin can select:
+
+Delivered Quantity
+Refund Quantity
+
+System automatically calculates:
+
+Refund Amount
+
+Refund wallet balance automatically.
+
+Order statuses:
+
+- Pending
+- Completed
+- Partially Completed
+- Partially Refunded
+- Refunded
+- Cancelled
+
+All refund actions must be logged.
+
+==================================================
+11. REVIEW SYSTEM
+==================================================
+
+After order completion:
+
+Show buttons:
+
+⭐ Leave Review
+⏭ Skip
+
+If Leave Review:
+
+Step 1:
+Choose Star Rating
+
+⭐1
+⭐2
+⭐3
+⭐4
+⭐5
+
+Step 2:
+Optional Review Message
+
+Step 3:
+Submit
+
+Review channel post:
+
+- Order ID
+- Product Name
+- Star Rating
+- Review Message
+
+==================================================
+12. REVIEW CAMPAIGN SYSTEM
+==================================================
+
+Reviews must only be allowed once per order.
+
+Add Review Campaign settings.
+
+Admin can create campaigns:
+
+- Campaign Enabled
+- Reward Enabled
+- Reward Amount (MC)
+- Max Users
+- Max Rewards
+- Max Rewards Per User
+- Start Time
+- End Time
+
+Reward Modes:
+
+- Auto Reward
+- Manual Approval
+
+Manual Approval:
+
+Review Channel shows:
+
+Approve & Reward
+Reject
+
+Only approved reviews receive MC.
+
+Users must never receive more rewards than campaign limits allow.
+
+==================================================
+13. BOT & MINI APP CONSISTENCY
+==================================================
+
+Bot and Mini App must use:
+
+- Same catalog system
+- Same checkout fields
+- Same order data
+- Same reviews
+- Same rewards
+- Same products
+- Same validation
+
+No duplicate logic.
+
+==================================================
+14. SAFETY REQUIREMENTS
+==================================================
+
+Do NOT break:
+
+- Wallet
+- Coins
+- Balances
+- Tiers
+- Orders
+- Payments
+- Existing products
+- Existing user data
+- Existing bot commands
+
+Before editing:
+
+Identify the exact files responsible for:
+
+- Catalog Management
+- Product Management
+- Checkout
+- Orders
+- Reviews
+- Wallet
+- Refunds
+- Mini App UI
+- Telegram Bot Admin Features
+
+Make only the minimal required changes while preserving all existing functionality.
+
+==================================================
+PAYMENT METHOD & DIRECT PAYMENT SYSTEM
+==================================================
+
+Mental Coins must NOT be used as a normal checkout payment method for regular products.
+
+Mental Coins are only for:
+- Redeem products
+- Discount coupons
+- Promotions
+- Spin rewards
+- Review campaign rewards
+
+Normal product checkout payment methods:
+
+- Wallet Balance
+- Direct Payment
+
+Display label:
+
+English:
+- Direct Payment
+
+Myanmar:
+- တိုက်ရိုက်ငွေပေးချေမည်
+
+Admin must be able to configure payment accounts from the admin panel.
+
+Supported account types:
+
+- KPay
+- Wave Pay
+- AyaPay
+- Bank Account
+- Custom Payment Method
+
+Direct Payment Flow:
+
+1. User selects Direct Payment.
+2. Show available payment accounts configured by admin.
+3. User transfers money.
+4. User must upload payment proof screenshot.
+5. Transaction ID field is optional.
+6. Create order with status:
+   - Payment Pending
+7. Admin reviews payment proof.
+
+Admin actions:
+
+- Confirm Payment
+- Reject Payment
+
+If payment is rejected:
+- Order cannot continue to delivery.
+- Order status becomes Payment Rejected.
+
+If payment is confirmed:
+- Order status becomes Payment Confirmed.
+- Order moves to Delivery Pending.
+
+Order Statuses:
+
+- Payment Pending
+- Payment Confirmed
+- Delivery Pending
+- Completed
+- Payment Rejected
+- Delivery Rejected
+- Refunded to Wallet
+
+Delivery Failure Handling:
+
+If payment has already been confirmed but delivery cannot be completed because of:
+- Wrong customer information
+- Wrong Game ID
+- Wrong Server ID
+- Product unavailable
+- Stock unavailable
+- Delivery failure
+- Any admin-approved reason
+
+Admin must be able to:
+
+- Reject Delivery
+- Refund to Wallet
+
+Example:
+
+User pays 12,000 KS using Direct Payment.
+Admin confirms payment.
+Delivery later fails.
+Admin selects Refund to Wallet.
+
+System automatically:
+- Adds 12,000 KS to the user's wallet balance
+- Creates refund history
+- Updates order status to Refunded to Wallet
+- Saves all actions in order history
+
+Product Payment Options:
+
+- Wallet Only
+- Direct Payment Only
+- Wallet + Direct Payment
+- MC Redeem Only
+- Coupon Eligible
+
+Bot and Mini App must use the same payment rules, payment statuses, refund logic, order statuses, and checkout behavior.
+
+==================================================
+ORDER NOTIFICATION, ADMIN ORDER MANAGEMENT & MINI APP ADMIN SYNC
+==================================================
+
+Problem:
+
+When a user places an order from the Mini App, the order is created successfully but the Telegram Admin Bot does not always receive a New Order notification.
+
+Also, Mini App Admin Panel does not show the same pending orders and order management functions available in the Telegram Admin Bot.
+
+Required behavior:
+
+1. Orders created from both Telegram Bot and Mini App must use the same order creation flow.
+
+2. Every new order from Mini App or Telegram Bot must instantly send a Telegram Admin Bot notification.
+
+3. The admin notification must show:
+
+- Order ID
+- Customer
+- Product
+- Catalog
+- Quantity
+- Unit Price
+- Total Price
+- Payment Method
+- Payment Status
+- Customer Delivery Fields
+- Time
+
+Example:
+
+Order ID: XXXXX
+
+Product: 86 Diamonds
+Catalog: Mobile Legends
+
+Game ID: 123456789
+Server ID: 1234
+
+Quantity: 5
+Total Price: 25,000 KS
+
+Payment Method: Wallet
+Payment Status: Delivery Pending
+
+4. Admin notification must include action buttons:
+
+- Confirm Payment
+- Reject Payment
+- Complete Order
+- Cancel & Refund
+- Partial Deliver
+- Partial Refund
+- Refund To Wallet
+- Message User
+- Warn User
+- View Details
+
+5. If quantity is greater than 1, Partial Deliver and Partial Refund actions must be available.
+
+6. Pending orders in Telegram Admin Bot and Mini App Admin Panel must be manageable, not view-only.
+
+7. When admin opens a pending order, show:
+
+- Order Information
+- Customer Delivery Fields
+- Payment Information
+- Order History
+- Available Admin Actions
+
+8. Mini App Admin Panel must display the same orders as Telegram Admin Bot.
+
+9. Pending orders must appear in Mini App Admin Panel immediately after creation.
+
+10. Telegram Admin Bot and Mini App Admin Panel must use the same:
+
+- Database
+- API
+- Order IDs
+- Order Statuses
+- Order Actions
+- Order History
+
+11. Any action performed from Telegram Admin Bot must instantly update Mini App Admin Panel.
+
+12. Any action performed from Mini App Admin Panel must instantly update Telegram Admin Bot.
+
+13. Do not create separate order systems.
+
+Use one shared backend order management system as the single source of truth.
+
+Before editing:
+
+Identify the exact files responsible for:
+
+- Order Database
+- Order API
+- Order Creation
+- Telegram Admin Notifications
+- Mini App Admin Order List
+- Order Status Updates
+- Payment Status Updates
+- Refund Logic
+- Admin Order Actions
+
+Make only the minimal required changes.
+
+Do not break:
+
+- Wallet
+- Balance
+- Payments
+- Refunds
+- Existing Orders
+- Existing Products
+- Existing User Data
+- Order History
+- Telegram Bot Commands
