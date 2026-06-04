@@ -40,14 +40,14 @@ const PRIZE_POOL = [
 ] as const;
 type Prize = typeof PRIZE_POOL[number];
 
-function pickPrize(): Prize {
+function pickPrize(): { prize: Prize; prizeIndex: number } {
   const total = PRIZE_POOL.reduce((s, p) => s + p.weight, 0);
   let rand = Math.random() * total;
-  for (const p of PRIZE_POOL) {
-    rand -= p.weight;
-    if (rand <= 0) return p;
+  for (let i = 0; i < PRIZE_POOL.length; i++) {
+    rand -= PRIZE_POOL[i].weight;
+    if (rand <= 0) return { prize: PRIZE_POOL[i], prizeIndex: i };
   }
-  return PRIZE_POOL[0];
+  return { prize: PRIZE_POOL[0], prizeIndex: 0 };
 }
 
 function canFreeSpinToday(lastSpinAt: Date | null): boolean {
@@ -160,7 +160,7 @@ router.post("/spin", async (req: Request, res: Response) => {
   // Mark lastSpinAt before awarding prize (prevents double-spin on crash)
   await users.updateOne({ _id: u._id }, { $set: { lastSpinAt: now } });
 
-  const prize = pickPrize();
+  const { prize, prizeIndex } = pickPrize();
 
   // Award prize
   let newBalanceKS = dbUser.balanceKS;
@@ -193,6 +193,7 @@ router.post("/spin", async (req: Request, res: Response) => {
 
   return res.json({
     prize: { id: prize.id, label: prize.label, type: prize.type, value: prize.value },
+    prizeIndex,
     usedFreeSpin: freeSpin,
     newBalanceKS,
     newBalanceCoin,

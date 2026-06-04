@@ -259,6 +259,16 @@ async function bootstrap() {
   await bot.launch();
   await registerBotCommands();
 
+  // Set the chat menu button to open the Mini App directly
+  const miniAppUrl =
+    process.env.MINI_APP_URL ||
+    (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}/` : null);
+  if (miniAppUrl) {
+    bot.telegram.callApi('setMenuButton', {
+      menu_button: { type: 'web_app', text: '🛍 Open Store', web_app: { url: miniAppUrl } },
+    }).catch((err) => console.warn('[Bot] setMenuButton failed:', err.message));
+  }
+
   // Global crash handler — must run AFTER launch so telegram client is ready
   setupGlobalErrorHandlers(bot.telegram);
 

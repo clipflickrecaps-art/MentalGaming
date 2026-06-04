@@ -651,6 +651,7 @@ module.exports = function registerAdmin(bot) {
     await ctx.answerCbQuery();
     const p = await Product.findById(ctx.match[1]);
     if (!p) return ctx.reply('❌ Product not found.');
+    const photoStatus = p.imageUrl ? '🖼 Photo: ✅ Set' : '🖼 Photo: ➕ Add';
     await ctx.reply(
       `📦 *${p.name}*\n\n` +
       `📁 Category: ${p.category}\n` +
@@ -658,16 +659,57 @@ module.exports = function registerAdmin(bot) {
       `💰 Price: ${price(p.finalPrice)}\n` +
       `📦 Stock: ${p.stockCount === -1 ? '∞ Unlimited' : p.stockCount}\n` +
       `Status: ${p.isActive ? '✅ Active' : '🔴 Inactive'}\n` +
+      `${photoStatus}\n` +
       (p.description ? `📝 ${p.description}` : ''),
       {
         parse_mode: 'Markdown',
         ...Markup.inlineKeyboard([
           [Markup.button.callback(p.isActive ? '🔴 Deactivate' : '✅ Activate', `ap_toggle:${p._id}`)],
+          [Markup.button.callback('📸 Set Photo', `ap_photo:${p._id}`)],
           [Markup.button.callback('🗑 Delete', `ap_delete_ask:${p._id}`)],
           [Markup.button.callback('🔙 Products List', 'pm_list_products')],
         ]),
       }
     );
+  });
+
+  bot.action(/^ap_photo:(.+)$/, adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    ctx.session.photoProductId = ctx.match[1];
+    await ctx.reply(
+      `📸 *Set Product Photo*\n\nSend a photo/image for this product now.\nThe image will show in the Mini App store.\n\n_Send /cancel to abort._`,
+      { parse_mode: 'Markdown' }
+    );
+  });
+
+  // Handle photo upload for product image
+  bot.on('photo', adminOnly(), async (ctx, next) => {
+    if (!ctx.session?.photoProductId) return next();
+    const productId = ctx.session.photoProductId;
+    ctx.session.photoProductId = null;
+    try {
+      const photos = ctx.message.photo;
+      const best = photos[photos.length - 1]; // highest resolution
+      const fileLink = await ctx.telegram.getFileLink(best.file_id);
+      const imageUrl = fileLink.href || fileLink.toString();
+      const product = await Product.findByIdAndUpdate(
+        productId,
+        { imageUrl },
+        { new: true }
+      );
+      if (!product) return ctx.reply('❌ Product not found.');
+      await auditLog(ctx.from.id, 'SET_PRODUCT_PHOTO', productId, 'Product', { imageUrl });
+      await ctx.reply(
+        `✅ Photo updated for *${product.name}*!\n\nIt will now show in the Mini App store.`,
+        {
+          parse_mode: 'Markdown',
+          ...Markup.inlineKeyboard([[Markup.button.callback('📦 Back to Product', `ap_view:${productId}`)]]),
+        }
+      );
+    } catch (err) {
+      ctx.session.photoProductId = null;
+      await ctx.reply(`❌ Failed to save photo: ${err.message}`);
+    }
   });
 
   // ── Flash sale / digital codes — help cards with Back ─────────────────────
@@ -840,6 +882,11 @@ module.exports = function registerAdmin(bot) {
 
   // ── Manual price setter (from rate manager scene) ──────────────────────────
   bot.on('message', async (ctx, next) => {
+    // Cancel pending photo upload
+    if (ctx.session?.photoProductId && ctx.message?.text === '/cancel') {
+      ctx.session.photoProductId = null;
+      return ctx.reply('❌ Photo upload cancelled.');
+    }
     if (ctx.session?.rm_manual_product && ctx.message?.text) {
       const p = parseInt(ctx.message.text.trim(), 10);
       if (isNaN(p) || p <= 0) return ctx.reply('❌ Enter a positive integer.');

@@ -10,6 +10,14 @@ import { getTg, haptic } from "@/lib/telegram";
 
 export default function ProfilePage() {
   const meQ = useQuery({ queryKey: ["me"], queryFn: () => api.get<Me>("/me") });
+  const adminQ = useQuery({
+    queryKey: ["admin-me"],
+    queryFn: () => api.get<{ isAdmin: boolean; role: string }>("/admin/me"),
+    retry: false,
+    staleTime: Infinity,
+  });
+
+  const isAdmin = adminQ.data?.isAdmin === true;
 
   return (
     <Layout title="Profile" showNav>
@@ -45,7 +53,9 @@ export default function ProfilePage() {
               <NavRow href="/orders" icon={<ShoppingBag className="h-4 w-4" />} label="My orders" />
               <NavRow href="/play" icon={<Gamepad2 className="h-4 w-4" />} label="Spin, check-in & referral" />
               <NavRow href="/support" icon={<HelpCircle className="h-4 w-4" />} label="Help & support" />
-              <NavRow href="/admin" icon={<ShieldCheck className="h-4 w-4" />} label="Admin Panel" />
+              {isAdmin && (
+                <NavRow href="/admin" icon={<ShieldCheck className="h-4 w-4" />} label="Admin Panel" />
+              )}
               <NavRow
                 href="#"
                 icon={<LogOut className="h-4 w-4" />}
