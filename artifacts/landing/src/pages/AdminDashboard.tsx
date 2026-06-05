@@ -12,11 +12,11 @@ interface AdminMe { isAdmin: boolean; role: string }
 export default function AdminDashboard() {
   const meQ = useQuery<AdminMe>({
     queryKey: ["admin-me"],
-    queryFn: () => api.get("/store/admin/me"),
+    queryFn: () => api.get("/admin/me"),
   });
   const sumQ = useQuery<Summary>({
     queryKey: ["admin-summary"],
-    queryFn: () => api.get("/store/admin/summary"),
+    queryFn: () => api.get("/admin/summary"),
     refetchInterval: 30_000,
   });
 

@@ -30,12 +30,12 @@ export default function AdminTopups() {
 
   const q = useQuery<TopupsResponse>({
     queryKey: ["admin-topups"],
-    queryFn: () => api.get("/store/admin/topups"),
+    queryFn: () => api.get("/admin/topups"),
     refetchInterval: 15_000,
   });
 
   const approve = useMutation<ApproveResult, Error, string>({
-    mutationFn: (id) => api.patch(`/store/admin/topups/${id}/approve`, {}),
+    mutationFn: (id) => api.patch(`/admin/topups/${id}/approve`, {}),
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ["admin-topups"] });
       qc.invalidateQueries({ queryKey: ["admin-summary"] });
@@ -51,7 +51,7 @@ export default function AdminTopups() {
   });
 
   const reject = useMutation<{ ok: boolean }, Error, { id: string; reason: string }>({
-    mutationFn: ({ id, reason }) => api.patch(`/store/admin/topups/${id}/reject`, { reason }),
+    mutationFn: ({ id, reason }) => api.patch(`/admin/topups/${id}/reject`, { reason }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin-topups"] });
       qc.invalidateQueries({ queryKey: ["admin-summary"] });

@@ -40,13 +40,13 @@ export default function AdminOrders() {
 
   const q = useQuery<OrdersResponse>({
     queryKey: ["admin-orders", tab],
-    queryFn: () => api.get(`/store/admin/orders?status=${tab}`),
+    queryFn: () => api.get(`/admin/orders?status=${tab}`),
     refetchInterval: 15_000,
   });
 
   const patch = useMutation({
     mutationFn: ({ id, status, note }: { id: string; status: string; note?: string }) =>
-      api.patch(`/store/admin/orders/${id}`, { status, note }),
+      api.patch(`/admin/orders/${id}`, { status, note }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin-orders"] });
       qc.invalidateQueries({ queryKey: ["admin-summary"] });
