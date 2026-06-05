@@ -24,13 +24,44 @@ const { buildMessage, price, formatDate } = require('../utils/ui');
 const { auditLog } = require('../services/logger');
 const { flashLabel, formatCountdown } = require('../services/FlashSaleService');
 const Product = require('../models/Product');
+const Catalog = require('../models/Catalog');
 const User = require('../models/User');
 
-// ── Games that require Zone ID ────────────────────────────────────────────────
+// ── Games that require Zone ID (legacy — kept for products with no catalog) ───
 const ZONE_REQUIRED = ['mobile legends', 'ml', 'moonton'];
 
 function needsZone(gameName = '') {
   return ZONE_REQUIRED.some((g) => gameName.toLowerCase().includes(g));
+}
+
+// ── Resolve the checkout fields for a product ─────────────────────────────────
+// Returns array of field defs from: product override > catalog > legacy fallback
+async function resolveCheckoutFields(product) {
+  // Product has explicit override (empty array means "no fields")
+  if (Array.isArray(product.checkoutFieldsOverride) && product.checkoutFieldsOverride !== null) {
+    return product.checkoutFieldsOverride
+      .slice()
+      .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+  }
+  // Pull from catalog
+  if (product.catalogId) {
+    const catalog = await Catalog.findById(product.catalogId).lean();
+    if (catalog?.checkoutFields?.length) {
+      return catalog.checkoutFields
+        .slice()
+        .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+    }
+  }
+  // Legacy fallback: DirectTopup products always need a Game ID
+  if (product.productType === 'DirectTopup') {
+    return [
+      { key: 'game_id', label: 'Game ID', fieldType: 'text', required: true, placeholder: 'Enter your Player ID' },
+      ...(needsZone(product.category || product.name)
+        ? [{ key: 'zone_id', label: 'Zone ID', fieldType: 'number', required: true, placeholder: 'Zone / Server ID' }]
+        : []),
+    ];
+  }
+  return [];
 }
 
 // ── Admin notification keyboard ───────────────────────────────────────────────
@@ -81,6 +112,9 @@ const orderScene = new Scenes.WizardScene(
     const tierDiscountPct = tierResult.pct;
     const priceAfterTier  = tierResult.finalPrice;
 
+    // Resolve checkout fields once at session start
+    const checkoutFields = await resolveCheckoutFields(product);
+
     ctx.session.orderSession = {
       productId: product._id.toString(),
       productName: product.name,
@@ -92,8 +126,13 @@ const orderScene = new Scenes.WizardScene(
       tierDiscountPct,
       effectivePrice: priceAfterTier,   // price after flash + tier, before promo
       gameName: product.category,
+      // Legacy fields (kept for backwards-compat with admin notify + bot scene)
       gameId: null,
       zoneId: null,
+      // Dynamic checkout fields
+      checkoutFields,            // [{key, label, fieldType, required, placeholder}]
+      checkoutData: {},          // {key: value} collected so far
+      checkoutFieldIndex: 0,     // which field we're currently collecting
       promoCode: null,
       promoDiscount: 0,
       finalAmount: priceAfterTier,
@@ -154,47 +193,73 @@ const orderScene = new Scenes.WizardScene(
     return ctx.wizard.next();
   },
 
-  // ── Step 1: Game ID (DirectTopup) or auto-skip (DigitalCode) ─────────────
+  // ── Step 1: Checkout field collection (dynamic) or auto-skip ─────────────
   async (ctx) => {
     const sess = ctx.session.orderSession;
     if (!sess) { await ctx.reply('❌ Session expired.'); return ctx.scene.leave(); }
 
-    if (sess.productType === 'DigitalCode') {
+    const fields = sess.checkoutFields || [];
+
+    // No fields needed (DigitalCode with no catalog fields, or catalog with 0 fields)
+    if (!fields.length) {
       ctx.wizard.selectStep(2);
       return ctx.wizard.steps[2](ctx);
     }
 
-    // Show address book if entries exist
-    if (ctx.session._addressBookShown) {
-      // Waiting for manual game ID text
-      if (!ctx.message?.text) return ctx.reply('Please enter your Game ID:');
-      const input = ctx.message.text.trim().split(/\s+/);
-      sess.gameId = input[0];
-      sess.zoneId = input[1] || null;
-      ctx.session._addressBookShown = false;
-      return ctx.wizard.selectStep(2), ctx.wizard.steps[2](ctx);
+    // If arriving here via text input: store value for current field
+    if (ctx.session._collectingFieldIndex != null && ctx.message?.text) {
+      const idx = ctx.session._collectingFieldIndex;
+      const field = fields[idx];
+      if (field) {
+        const val = ctx.message.text.trim();
+        if (!val && field.required) {
+          return ctx.reply(`⚠️ *${field.label}* is required. Please enter a value:`);
+        }
+        if (!sess.checkoutData) sess.checkoutData = {};
+        sess.checkoutData[field.key] = val;
+
+        // Backfill legacy gameId/zoneId for admin notify
+        if (field.key === 'game_id') sess.gameId = val;
+        if (field.key === 'zone_id') sess.zoneId = val;
+
+        const nextIdx = idx + 1;
+        if (nextIdx < fields.length) {
+          ctx.session._collectingFieldIndex = nextIdx;
+          return askForField(ctx, fields[nextIdx]);
+        }
+
+        // All fields collected — proceed to promo step
+        ctx.session._collectingFieldIndex = null;
+        ctx.wizard.selectStep(2);
+        return ctx.wizard.steps[2](ctx);
+      }
     }
 
-    // Fetch saved addresses
-    const savedIds = await getEntries(ctx.from.id, sess.gameName);
-    if (savedIds.length > 0) {
-      const buttons = savedIds.slice(0, 5).map((e) => [
-        Markup.button.callback(
-          `${e.isDefault ? '⭐ ' : ''}${formatEntry(e)}`,
-          `order_pick_id:${e._id}`
-        ),
-      ]);
-      buttons.push([Markup.button.callback('➕ Enter New ID', 'order_new_id')]);
-      buttons.push([Markup.button.callback('❌ Cancel', 'order_cancel_scene')]);
-
-      await ctx.reply(
-        `🎮 *Choose your Game ID*\n\nSelect a saved account or enter a new one:`,
-        { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) }
-      );
-    } else {
-      await askForGameId(ctx, sess);
+    // First field: check address book if it's the first field and is a game_id type
+    const firstField = fields[0];
+    if (!ctx.session._collectingFieldIndex && firstField.key === 'game_id') {
+      const savedIds = await getEntries(ctx.from.id, sess.gameName);
+      if (savedIds.length > 0) {
+        const buttons = savedIds.slice(0, 5).map((e) => [
+          Markup.button.callback(
+            `${e.isDefault ? '⭐ ' : ''}${formatEntry(e)}`,
+            `order_pick_id:${e._id}`
+          ),
+        ]);
+        buttons.push([Markup.button.callback('➕ Enter New ID', 'order_new_id')]);
+        buttons.push([Markup.button.callback('❌ Cancel', 'order_cancel_scene')]);
+        await ctx.reply(
+          `🎮 *Choose your Game ID*\n\nSelect a saved account or enter a new one:`,
+          { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) }
+        );
+        ctx.session._collectingFieldIndex = 0;
+        return ctx.wizard.next();
+      }
     }
 
+    // Start collecting from field 0
+    ctx.session._collectingFieldIndex = 0;
+    await askForField(ctx, firstField);
     return ctx.wizard.next();
   },
 
@@ -250,9 +315,18 @@ const orderScene = new Scenes.WizardScene(
     const promoLine = sess.promoCode
       ? [`🎟 Promo *${sess.promoCode}*: −${price(sess.promoDiscount)}`]
       : [];
-    const gameIdLine = sess.gameId
-      ? [`🎮 Game ID: ${theme.format.code(sess.gameId)}${sess.zoneId ? ` / Zone: ${sess.zoneId}` : ''}`]
-      : [];
+
+    // Show collected checkout fields
+    const checkoutLines = sess.checkoutFields?.length
+      ? Object.entries(sess.checkoutData || {})
+          .map(([k, v]) => {
+            const fdef = (sess.checkoutFields || []).find((f) => f.key === k);
+            return `📋 ${fdef?.label || k}: ${theme.format.code(String(v))}`;
+          })
+      : (sess.gameId
+          ? [`🎮 Game ID: ${theme.format.code(sess.gameId)}${sess.zoneId ? ` / Zone: ${sess.zoneId}` : ''}`]
+          : []);
+    const gameIdLine = checkoutLines;
     const tierBadgeMap = { Silver: '🥈', Gold: '🥇', Platinum: '💎' };
     const userTier = user?.membershipTier || 'Silver';
     const tierLine = sess.tierDiscount > 0
@@ -304,6 +378,20 @@ async function askForGameId(ctx, sess) {
     { parse_mode: 'Markdown' }
   );
   ctx.session._addressBookShown = true;
+}
+
+async function askForField(ctx, field) {
+  const optLabel = field.required ? '' : ' _(optional — send `-` to skip)_';
+  const placeholder = field.placeholder ? `\n_e.g. ${field.placeholder}_` : '';
+  await ctx.reply(
+    `📝 *${field.label}*${optLabel}${placeholder}\n\nPlease enter your ${field.label}:`,
+    {
+      parse_mode: 'Markdown',
+      ...Markup.inlineKeyboard([
+        [Markup.button.callback('❌ Cancel', 'order_cancel_scene')],
+      ]),
+    }
+  );
 }
 
 // ── Action: Proceed to game ID step ────────────────────────────────────────────
@@ -374,6 +462,12 @@ orderScene.action('order_final_confirm', async (ctx) => {
       `_Your order is Pending. You'll be notified once it's complete._`
     );
 
+    // Build checkoutData array from collected hash
+    const checkoutDataArr = Object.entries(sess.checkoutData || {}).map(([key, value]) => {
+      const fdef = (sess.checkoutFields || []).find((f) => f.key === key);
+      return { key, label: fdef?.label || key, value: String(value) };
+    });
+
     const { order } = await createOrder(ctx.from.id, sess.productId, {
       gameId: sess.gameId,
       zoneId: sess.zoneId,
@@ -383,6 +477,7 @@ orderScene.action('order_final_confirm', async (ctx) => {
       tierDiscount: sess.tierDiscount || 0,
       tierDiscountPct: sess.tierDiscountPct || 0,
       finalAmount: sess.finalAmount,
+      checkoutData: checkoutDataArr,
     });
 
     if (sess.promoCode) {
@@ -419,6 +514,7 @@ orderScene.action('order_final_confirm', async (ctx) => {
     ctx.session.orderSession = null;
     ctx.session.orderProductId = null;
     ctx.session._addressBookShown = false;
+    ctx.session._collectingFieldIndex = null;
   } catch (err) {
     await ctx.telegram.editMessageText(ref.chatId, ref.messageId, undefined, `❌ ${err.message}`);
   }
@@ -433,6 +529,7 @@ orderScene.action('order_cancel_scene', async (ctx) => {
   ctx.session.orderSession = null;
   ctx.session.orderProductId = null;
   ctx.session._addressBookShown = false;
+  ctx.session._collectingFieldIndex = null;
   return ctx.scene.leave();
 });
 
@@ -443,11 +540,19 @@ async function notifyAdmin(ctx, order, sess) {
   const orderId = order._id.toString();
   const shortId = orderId.slice(-8).toUpperCase();
 
-  const promoLine      = sess.promoCode    ? `\n🎟 Promo: \`${sess.promoCode}\` (−${price(sess.promoDiscount)})` : '';
-  const tierLine       = sess.tierDiscount > 0 ? `\n🏷 Tier Discount (${sess.tierDiscountPct}%): −${price(sess.tierDiscount)}` : '';
-  const flashSaleLine  = sess.isFlashSale  ? `\n🔥 Flash Sale applied` : '';
-  const gameIdLine     = sess.gameId ? `\n🎮 Game ID: \`${sess.gameId}\`${sess.zoneId ? ` / Zone: \`${sess.zoneId}\`` : ''}` : '';
-  const typeIcon       = sess.productType === 'DigitalCode' ? '🎁 Digital Code' : '🎮 Direct Top-up';
+  const promoLine     = sess.promoCode    ? `\n🎟 Promo: \`${sess.promoCode}\` (−${price(sess.promoDiscount)})` : '';
+  const tierLine      = sess.tierDiscount > 0 ? `\n🏷 Tier Discount (${sess.tierDiscountPct}%): −${price(sess.tierDiscount)}` : '';
+  const flashSaleLine = sess.isFlashSale  ? `\n🔥 Flash Sale applied` : '';
+  const typeIcon      = sess.productType === 'DigitalCode' ? '🎁 Digital Code' : '🎮 Direct Top-up';
+
+  // Build delivery info lines from dynamic checkoutData or legacy gameId
+  const checkoutDataEntries = Object.entries(sess.checkoutData || {});
+  const deliveryLines = checkoutDataEntries.length
+    ? checkoutDataEntries.map(([k, v]) => {
+        const fdef = (sess.checkoutFields || []).find((f) => f.key === k);
+        return `\n📋 ${fdef?.label || k}: \`${v}\``;
+      }).join('')
+    : (sess.gameId ? `\n🎮 Game ID: \`${sess.gameId}\`${sess.zoneId ? ` / Zone: \`${sess.zoneId}\`` : ''}` : '');
 
   const text =
     `🔔 *New Order — Action Required*\n\n` +
@@ -455,7 +560,7 @@ async function notifyAdmin(ctx, order, sess) {
     `👤 Customer: ${userTag} *(${user.first_name})*\n` +
     `📦 Product: *${sess.productName}*\n` +
     `🗂 Type: ${typeIcon}` +
-    gameIdLine +
+    deliveryLines +
     `\n💰 Original: ${price(sess.originalPrice)}` +
     flashSaleLine +
     tierLine +

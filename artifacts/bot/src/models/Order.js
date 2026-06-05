@@ -55,7 +55,26 @@ const orderSchema = new mongoose.Schema(
       default: 'DirectTopup',
     },
 
-    // ── Game ID (for DirectTopup) ─────────────────────────────────────────
+    // ── Catalog info ─────────────────────────────────────────────────────────
+    catalogId:   { type: mongoose.Schema.Types.ObjectId, ref: 'Catalog', default: null },
+    catalogName: { type: String, default: null },
+
+    // ── Quantity & pricing ────────────────────────────────────────────────────
+    quantity:  { type: Number, default: 1, min: 1 },
+    unitPrice: { type: Number, default: null },
+
+    // ── Dynamic checkout fields ───────────────────────────────────────────────
+    // Replaces hardcoded gameId/zoneId as primary store — gameId/zoneId kept for back-compat
+    checkoutData: {
+      type: [{
+        key:   { type: String },
+        label: { type: String },
+        value: { type: String },
+      }],
+      default: [],
+    },
+
+    // ── Game ID (for DirectTopup) — kept for backwards compatibility ──────────
     gameId: { type: String, default: null },
     zoneId: { type: String, default: null },
     gameName: { type: String, default: null },

@@ -32,6 +32,25 @@ router.use(telegramAuth);
 
 // ── Types mirroring bot Mongoose models ─────────────────────────────────────
 
+interface CheckoutFieldDef {
+  key: string;
+  label: string;
+  fieldType: "text" | "number" | "email" | "textarea";
+  required: boolean;
+  placeholder?: string;
+  helpText?: string;
+  sortOrder?: number;
+}
+
+interface CatalogDoc {
+  _id: ObjectId;
+  name: string;
+  imageUrl: string | null;
+  sortOrder: number;
+  isActive: boolean;
+  checkoutFields: CheckoutFieldDef[];
+}
+
 interface ProductDoc {
   _id: ObjectId;
   name: string;
@@ -46,6 +65,9 @@ interface ProductDoc {
   isActive: boolean;
   imageUrl: string | null;
   description: string;
+  catalogId?: ObjectId | null;
+  sortOrder?: number;
+  checkoutFieldsOverride?: CheckoutFieldDef[] | null;
 }
 
 interface OrderDoc {
@@ -61,6 +83,11 @@ interface OrderDoc {
   gameId: string | null;
   zoneId: string | null;
   gameName: string | null;
+  catalogId?: ObjectId | null;
+  catalogName?: string | null;
+  quantity?: number;
+  unitPrice?: number | null;
+  checkoutData?: Array<{ key: string; label: string; value: string }>;
   timestamp: Date;
   notes: string;
 }
@@ -142,6 +169,9 @@ function publicProduct(p: ProductDoc) {
     inStock: p.stockCount === -1 || p.stockCount > 0,
     imageUrl: p.imageUrl,
     description: p.description,
+    catalogId: p.catalogId?.toString() ?? null,
+    sortOrder: p.sortOrder ?? 0,
+    checkoutFields: p.checkoutFieldsOverride ?? null,
   };
 }
 
@@ -169,6 +199,65 @@ router.get("/me", (req: Request, res: Response) => {
     language: u.language,
     photoUrl: req.tgUser?.photo_url || null,
     tierDiscountPct: tierDiscountPct(u.membershipTier),
+  });
+});
+
+// ── GET /catalogs ──────────────────────────────────────────────────────────
+
+router.get("/catalogs", async (req: Request, res: Response) => {
+  const catalogs = await getCollection<CatalogDoc>("catalogs");
+  const docs = await catalogs
+    .find({ isActive: true })
+    .sort({ sortOrder: 1, name: 1 })
+    .toArray();
+
+  // Count products per catalog
+  const products = await getCollection<ProductDoc>("products");
+  const ids = docs.map((c) => c._id);
+  const counts = ids.length
+    ? await products
+        .aggregate<{ _id: ObjectId; count: number }>([
+          { $match: { isActive: true, catalogId: { $in: ids } } },
+          { $group: { _id: "$catalogId", count: { $sum: 1 } } },
+        ])
+        .toArray()
+    : [];
+  const countMap = new Map(counts.map((c) => [c._id.toString(), c.count]));
+
+  res.json({
+    catalogs: docs.map((c) => ({
+      id: c._id.toString(),
+      name: c.name,
+      imageUrl: c.imageUrl,
+      sortOrder: c.sortOrder,
+      checkoutFields: c.checkoutFields,
+      productCount: countMap.get(c._id.toString()) ?? 0,
+    })),
+  });
+});
+
+// ── GET /catalogs/:id ──────────────────────────────────────────────────────
+
+router.get("/catalogs/:id", async (req: Request, res: Response) => {
+  const id = safeId(String(req.params["id"] ?? ""));
+  if (!id) { res.status(400).json({ error: "Bad catalog id" }); return; }
+
+  const catalogs = await getCollection<CatalogDoc>("catalogs");
+  const cat = await catalogs.findOne({ _id: id, isActive: true });
+  if (!cat) { res.status(404).json({ error: "Catalog not found" }); return; }
+
+  const products = await getCollection<ProductDoc>("products");
+  const productDocs = await products
+    .find({ catalogId: id, isActive: true })
+    .sort({ sortOrder: 1, name: 1 })
+    .toArray();
+
+  res.json({
+    id: cat._id.toString(),
+    name: cat.name,
+    imageUrl: cat.imageUrl,
+    checkoutFields: cat.checkoutFields,
+    products: productDocs.map(publicProduct),
   });
 });
 
@@ -232,37 +321,86 @@ router.get("/flashsale", async (_req: Request, res: Response) => {
 });
 
 // ── POST /orders ───────────────────────────────────────────────────────────
-// body: { productId, gameId?, zoneId?, paymentMethod: "wallet" | "coin" }
+// body: { productId, checkoutData?, gameId?, zoneId?, quantity?, paymentMethod: "wallet" | "coin" }
+// checkoutData: [{key, label, value}] — dynamic checkout fields from catalog
+// gameId/zoneId kept for backward-compat with older Mini App clients
 
 router.post("/orders", async (req: Request, res: Response) => {
   const u = asUser(req);
   const body = req.body as {
     productId?: string;
+    checkoutData?: Array<{ key: string; label: string; value: string }>;
     gameId?: string;
     zoneId?: string;
+    quantity?: number;
     paymentMethod?: "wallet" | "coin";
   };
 
   const pid = safeId(body.productId || "");
   if (!pid) return res.status(400).json({ error: "Bad product id" });
 
+  const quantity = Math.max(1, Math.min(10, Number(body.quantity) || 1));
+
   const products = await getCollection<ProductDoc>("products");
+  const catalogs = await getCollection<CatalogDoc>("catalogs");
   const product = await products.findOne({ _id: pid, isActive: true });
   if (!product) return res.status(404).json({ error: "Product not found" });
   if (!(product.stockCount === -1 || product.stockCount > 0)) {
     return res.status(409).json({ error: "Out of stock" });
   }
 
-  if (product.productType === "DirectTopup") {
-    if (!body.gameId || !body.gameId.trim()) {
+  // ── Resolve checkout fields and validate required fields ──────────────────
+  let checkoutFields: CheckoutFieldDef[] = [];
+  if (product.checkoutFieldsOverride != null && Array.isArray(product.checkoutFieldsOverride)) {
+    checkoutFields = product.checkoutFieldsOverride;
+  } else if (product.catalogId) {
+    const cat = await catalogs.findOne({ _id: product.catalogId });
+    checkoutFields = cat?.checkoutFields ?? [];
+  } else if (product.productType === "DirectTopup") {
+    // Legacy: require gameId
+    if (!body.gameId?.trim()) {
       return res.status(400).json({ error: "Game ID is required" });
     }
+  }
+
+  // Validate required checkout fields
+  const submittedData = Array.isArray(body.checkoutData) ? body.checkoutData : [];
+  const dataMap = new Map(submittedData.map((d) => [d.key, d.value?.trim() ?? ""]));
+
+  for (const field of checkoutFields) {
+    if (field.required) {
+      const val = dataMap.get(field.key) ?? "";
+      if (!val) {
+        return res.status(400).json({ error: `${field.label} is required`, field: field.key });
+      }
+    }
+  }
+
+  // Build normalized checkoutData array (merge with legacy gameId/zoneId if needed)
+  let checkoutData: Array<{ key: string; label: string; value: string }> = submittedData
+    .filter((d) => d.key && d.value?.trim())
+    .map((d) => ({ key: d.key, label: d.label || d.key, value: d.value.trim() }));
+
+  // Backward compat: if no checkoutData but gameId provided, synthesize it
+  if (!checkoutData.length && body.gameId?.trim()) {
+    checkoutData = [{ key: "game_id", label: "Game ID", value: body.gameId.trim() }];
+    if (body.zoneId?.trim()) {
+      checkoutData.push({ key: "zone_id", label: "Zone ID", value: body.zoneId.trim() });
+    }
+  }
+
+  // Resolve catalog name for order record
+  let catalogName: string | null = null;
+  if (product.catalogId) {
+    const cat = await catalogs.findOne({ _id: product.catalogId }, { projection: { name: 1 } });
+    catalogName = cat?.name ?? null;
   }
 
   const baseAmount = effectivePrice(product);
   const tierPct = tierDiscountPct(u.membershipTier);
   const tierDiscount = Math.round((baseAmount * tierPct) / 100);
-  const finalAmount = Math.max(0, baseAmount - tierDiscount);
+  const unitFinalAmount = Math.max(0, baseAmount - tierDiscount);
+  const totalFinalAmount = unitFinalAmount * quantity;
 
   const method = body.paymentMethod === "coin" ? "coin" : "wallet";
   const wallet: "KS" | "Coin" = method === "coin" ? "Coin" : "KS";
@@ -270,13 +408,13 @@ router.post("/orders", async (req: Request, res: Response) => {
   const currentBalance =
     method === "coin" ? u.balanceCoin : u.balanceKS;
 
-  if (currentBalance < finalAmount) {
+  if (currentBalance < totalFinalAmount) {
     return res.status(402).json({
       error:
         method === "coin"
           ? "Not enough Mental Coins"
           : "Not enough wallet balance",
-      needed: finalAmount,
+      needed: totalFinalAmount,
       balance: currentBalance,
     });
   }
@@ -288,11 +426,9 @@ router.post("/orders", async (req: Request, res: Response) => {
   const orderId = new ObjectId();
 
   // Atomic debit: conditional update on balance prevents overspend race.
-  // Returns the POST-debit document so the ledger reflects truth even under
-  // concurrent purchases.
   const debited = await users.findOneAndUpdate(
-    { _id: u._id, [balanceField]: { $gte: finalAmount } },
-    { $inc: { [balanceField]: -finalAmount }, $set: { lastActive: now } },
+    { _id: u._id, [balanceField]: { $gte: totalFinalAmount } },
+    { $inc: { [balanceField]: -totalFinalAmount }, $set: { lastActive: now } },
     { returnDocument: "after" }
   );
   if (!debited) {
@@ -300,21 +436,36 @@ router.post("/orders", async (req: Request, res: Response) => {
   }
   const balanceAfter =
     method === "coin" ? debited.balanceCoin : debited.balanceKS;
-  const balanceBefore = balanceAfter + finalAmount;
+  const balanceBefore = balanceAfter + totalFinalAmount;
+
+  // Legacy gameId/zoneId: extract from checkoutData for backward-compat fields
+  const legacyGameId = checkoutData.find((d) => d.key === "game_id")?.value
+    ?? body.gameId?.trim()
+    ?? null;
+  const legacyZoneId = checkoutData.find((d) => d.key === "zone_id")?.value
+    ?? body.zoneId?.trim()
+    ?? null;
+
+  const unitPrice = baseAmount;
 
   const orderDoc: OrderDoc = {
     _id: orderId,
     userId: u._id,
     productId: product._id,
-    amount: finalAmount,
-    originalAmount: baseAmount,
-    tierDiscount,
+    amount: totalFinalAmount,
+    originalAmount: baseAmount * quantity,
+    tierDiscount: tierDiscount * quantity,
     tierDiscountPct: tierPct,
     status: "Pending",
     productType: product.productType,
-    gameId: body.gameId?.trim() || null,
-    zoneId: body.zoneId?.trim() || null,
+    gameId: legacyGameId,
+    zoneId: legacyZoneId,
     gameName: product.name,
+    catalogId: product.catalogId ?? null,
+    catalogName,
+    quantity,
+    unitPrice,
+    checkoutData,
     timestamp: now,
     notes: "Placed via Mini App",
   };
@@ -326,12 +477,12 @@ router.post("/orders", async (req: Request, res: Response) => {
       userId: u._id,
       type: "Purchase",
       wallet,
-      amount: -finalAmount,
+      amount: -totalFinalAmount,
       balanceBefore,
       balanceAfter,
       status: "Completed",
       paymentMethod: null,
-      description: `Order ${orderId.toString()} — ${product.name}`,
+      description: `Order ${orderId.toString()} — ${product.name}${quantity > 1 ? ` x${quantity}` : ""}`,
       createdAt: now,
       timestamp: now,
     });
@@ -340,7 +491,7 @@ router.post("/orders", async (req: Request, res: Response) => {
     try {
       await users.updateOne(
         { _id: u._id },
-        { $inc: { [balanceField]: finalAmount } }
+        { $inc: { [balanceField]: totalFinalAmount } }
       );
       await orders.deleteOne({ _id: orderId }).catch(() => {});
     } catch {
@@ -355,7 +506,7 @@ router.post("/orders", async (req: Request, res: Response) => {
 
   return res.json({
     orderId: orderId.toString(),
-    amount: finalAmount,
+    amount: totalFinalAmount,
     status: "Pending",
   });
 });

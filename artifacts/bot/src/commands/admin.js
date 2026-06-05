@@ -84,14 +84,35 @@ module.exports = function registerAdmin(bot) {
       {
         parse_mode: 'Markdown',
         ...Markup.inlineKeyboard([
-          [Markup.button.callback('📋 List Products', 'pm_list_products')],
-          [Markup.button.callback('➕ Add Product',   'admin_product_add')],
-          [Markup.button.callback('⚡ Flash Sale',     'pm_flashsale_help')],
-          [Markup.button.callback('🎁 Add Codes',     'pm_addcodes_help')],
-          [Markup.button.callback('🔙 Back',          'nav:go:admin_main')],
+          [Markup.button.callback('📋 List Products',  'pm_list_products')],
+          [Markup.button.callback('➕ Add Product',    'admin_product_add')],
+          [Markup.button.callback('📦 Bulk Import',    'bulk_import_start')],
+          [Markup.button.callback('📂 Catalogs',       'admin_catalogs_action')],
+          [Markup.button.callback('⚡ Flash Sale',      'pm_flashsale_help')],
+          [Markup.button.callback('🎁 Add Codes',      'pm_addcodes_help')],
+          [Markup.button.callback('🔙 Back',           'nav:go:admin_main')],
         ]),
       }
     );
+  });
+
+  bot.action('bulk_import_start', adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    const Catalog = require('../models/Catalog');
+    const catalogs = await Catalog.find({ isActive: true }).sort({ sortOrder: 1, name: 1 });
+    if (!catalogs.length) {
+      return ctx.reply(
+        '❌ No active catalogs yet.\n\nCreate a catalog first:\n📂 Admin → Products → Catalogs → Add Catalog',
+        { ...Markup.inlineKeyboard([[Markup.button.callback('📂 Catalogs', 'admin_catalogs_action')]]) }
+      );
+    }
+    ctx.session.catalogAction = 'bulk_select_catalog';
+    const buttons = catalogs.map((c) => [Markup.button.callback(c.name, `bulk_cat:${c._id}`)]);
+    buttons.push([Markup.button.callback('❌ Cancel', 'bulk_cancel')]);
+    await ctx.reply('📦 *Bulk Add Products*\n\nSelect the catalog:', {
+      parse_mode: 'Markdown',
+      ...Markup.inlineKeyboard(buttons),
+    });
   });
 
   // 👥 Manage Users → inline panel

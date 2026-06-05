@@ -55,7 +55,7 @@ async function checkStockWarning(product, telegram) {
 }
 
 // ── Create order (deducts wallet atomically) ─────────────────────────────────
-async function createOrder(telegramId, productId, { gameId = null, zoneId = null, gameName = null, promoCode = null, promoDiscount = 0, tierDiscount = 0, tierDiscountPct = 0, finalAmount = null } = {}) {
+async function createOrder(telegramId, productId, { gameId = null, zoneId = null, gameName = null, promoCode = null, promoDiscount = 0, tierDiscount = 0, tierDiscountPct = 0, finalAmount = null, checkoutData = [] } = {}) {
   const user = await User.findByTelegramId(telegramId);
   if (!user) throw new Error('User not found');
 
@@ -88,6 +88,7 @@ async function createOrder(telegramId, productId, { gameId = null, zoneId = null
       gameId,
       zoneId,
       gameName,
+      checkoutData,
       status: 'Pending',
     }], { session });
     order = order[0];

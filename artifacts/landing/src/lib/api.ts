@@ -70,6 +70,31 @@ export interface Me {
   tierDiscountPct: number;
 }
 
+export interface CheckoutField {
+  key: string;
+  label: string;
+  fieldType: "text" | "number" | "email" | "textarea";
+  required: boolean;
+  placeholder?: string;
+  helpText?: string;
+  sortOrder?: number;
+}
+
+export interface CheckoutDataEntry {
+  key: string;
+  label: string;
+  value: string;
+}
+
+export interface Catalog {
+  id: string;
+  name: string;
+  imageUrl: string | null;
+  sortOrder: number;
+  checkoutFields: CheckoutField[];
+  productCount: number;
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -83,11 +108,15 @@ export interface Product {
   inStock: boolean;
   imageUrl: string | null;
   description: string;
+  catalogId: string | null;
+  sortOrder: number;
+  checkoutFields: CheckoutField[] | null;
 }
 
 export interface Category { name: string; count: number; }
 
 export interface ShopResponse { products: Product[]; categories: Category[]; }
+export interface CatalogsResponse { catalogs: Catalog[]; }
 
 export type OrderStatus = "Pending" | "Processing" | "Success" | "Cancelled" | "Refunded";
 
@@ -100,6 +129,8 @@ export interface OrderSummary {
   status: OrderStatus;
   gameId: string | null;
   zoneId: string | null;
+  checkoutData?: CheckoutDataEntry[];
+  quantity?: number;
   timestamp: string;
 }
 
@@ -113,6 +144,10 @@ export interface OrderDetail {
   status: OrderStatus;
   gameId: string | null;
   zoneId: string | null;
+  checkoutData?: CheckoutDataEntry[];
+  quantity?: number;
+  unitPrice?: number | null;
+  catalogName?: string | null;
   timestamp: string;
   notes: string;
 }

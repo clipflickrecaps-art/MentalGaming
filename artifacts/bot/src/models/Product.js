@@ -47,6 +47,30 @@ const productSchema = new mongoose.Schema(
       comment: 'Products sharing same bundleGroup get 5% off when 2+ are bought',
     },
 
+    // ── Catalog ───────────────────────────────────────────────────────────────
+    catalogId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Catalog',
+      default: null,
+      index: true,
+    },
+    sortOrder: { type: Number, default: 0 },
+
+    // ── Checkout field overrides (null = use catalog defaults) ────────────────
+    checkoutFieldsOverride: {
+      type: [{
+        key:         { type: String, required: true },
+        label:       { type: String, required: true },
+        fieldType:   { type: String, enum: ['text', 'number', 'email', 'textarea'], default: 'text' },
+        required:    { type: Boolean, default: true },
+        placeholder: { type: String, default: '' },
+        helpText:    { type: String, default: '' },
+        sortOrder:   { type: Number, default: 0 },
+      }],
+      default: null,
+      comment: 'null = inherit from catalog; [] = no fields required; array = override',
+    },
+
     // ── External API / Auto-Delivery ─────────────────────────────────────────
     // deliveryMode: 'Manual' = staff fulfils manually  |  'Auto' = sent via provider API
     deliveryMode: {

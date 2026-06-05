@@ -83,6 +83,7 @@ function loadCommands(bot) {
     'trackOrder.js',        // ← /trackorder <shortId> — live status lookup + refresh
     'adminGameConfig.js',
     'channelAutoPost.js',   // ← Channel auto-post scheduler (owner)
+    'catalogAdmin.js',      // ← Catalog system + bulk product import
     'admin.js',
     'help.js',
     'ambient.js',           // ← LAST: catch-all ambient AI text handler

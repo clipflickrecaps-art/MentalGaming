@@ -124,7 +124,17 @@ function OrderDetailView({ id }: { id: string }) {
               </div>
               <OrderStatusBadge status={oQ.data.status} />
             </div>
-            {(oQ.data.gameId || oQ.data.zoneId) && (
+            {/* Dynamic checkout fields (new) */}
+            {oQ.data.checkoutData && oQ.data.checkoutData.length > 0 ? (
+              <div className="mt-3 text-xs grid grid-cols-2 gap-2">
+                {oQ.data.checkoutData.map((d) => (
+                  <div key={d.key} className="glass-strong rounded-xl px-3 py-2">
+                    <div className="text-muted-foreground text-[10px] uppercase">{d.label}</div>
+                    <div className="font-mono truncate">{d.value}</div>
+                  </div>
+                ))}
+              </div>
+            ) : (oQ.data.gameId || oQ.data.zoneId) ? (
               <div className="mt-3 text-xs grid grid-cols-2 gap-2">
                 {oQ.data.gameId && (
                   <div className="glass-strong rounded-xl px-3 py-2">
@@ -139,7 +149,7 @@ function OrderDetailView({ id }: { id: string }) {
                   </div>
                 )}
               </div>
-            )}
+            ) : null}
           </Glass>
 
           <Glass className="p-4 space-y-1.5 text-sm">
