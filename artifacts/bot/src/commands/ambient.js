@@ -36,6 +36,12 @@ const ADMIN_SESSION_KEYS = [
   'faqAwaitingSearch',
   'awaitingReviewComment',
   'awaitingTicketScreenshot',
+  // Product & game config wizards
+  'adminAddProduct',
+  'gcEdit',
+  'catalogAction',
+  'editProductField',
+  'rm_manual_product',
 ];
 
 // ── Typing simulation ─────────────────────────────────────────────────────────
@@ -49,6 +55,10 @@ async function showTyping(ctx) {
 module.exports = function registerAmbient(bot) {
 
   bot.on('text', async (ctx, next) => {
+    // ── AI TEMPORARILY DISABLED ─────────────────────────────────────────────
+    return next();
+    // ───────────────────────────────────────────────────────────────────────
+
     const text = ctx.message?.text;
     if (!text) return next();
 
