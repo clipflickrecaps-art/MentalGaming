@@ -70,6 +70,103 @@ async function sendCatalogView(ctx, catalog) {
   });
 }
 
+// ── Built-in game catalog templates ───────────────────────────────────────────
+const CATALOG_TEMPLATES = {
+  ml_diamonds: {
+    label: '💎 Mobile Legends Diamonds',
+    products: [
+      { name: '💎 86 Diamonds',   finalPrice: 6000 },
+      { name: '💎 172 Diamonds',  finalPrice: 12000 },
+      { name: '💎 257 Diamonds',  finalPrice: 18000 },
+      { name: '💎 343 Diamonds',  finalPrice: 24000 },
+      { name: '💎 429 Diamonds',  finalPrice: 30000 },
+      { name: '💎 514 Diamonds',  finalPrice: 36000 },
+      { name: '💎 600 Diamonds',  finalPrice: 42000 },
+      { name: '💎 706 Diamonds',  finalPrice: 49000 },
+      { name: '💎 878 Diamonds',  finalPrice: 61000 },
+      { name: '💎 963 Diamonds',  finalPrice: 67000 },
+      { name: '💎 1050 Diamonds', finalPrice: 73000 },
+      { name: '💎 1412 Diamonds', finalPrice: 98000 },
+      { name: '💎 2195 Diamonds', finalPrice: 152000 },
+      { name: '🏆 Weekly Pass',   finalPrice: 4500 },
+      { name: '🏆 Twilight Pass', finalPrice: 35000 },
+    ],
+  },
+  pubg_uc: {
+    label: '🔫 PUBG Mobile UC',
+    products: [
+      { name: '🔫 60 UC',    finalPrice: 2000 },
+      { name: '🔫 300 UC',   finalPrice: 9000 },
+      { name: '🔫 325 UC',   finalPrice: 9500 },
+      { name: '🔫 600 UC',   finalPrice: 17500 },
+      { name: '🔫 660 UC',   finalPrice: 19000 },
+      { name: '🔫 1500 UC',  finalPrice: 42000 },
+      { name: '🔫 1800 UC',  finalPrice: 50000 },
+      { name: '🔫 3000 UC',  finalPrice: 82000 },
+      { name: '🔫 3850 UC',  finalPrice: 104000 },
+      { name: '🔫 6000 UC',  finalPrice: 161000 },
+      { name: '🔫 8100 UC',  finalPrice: 216000 },
+    ],
+  },
+  ff_diamonds: {
+    label: '🔥 Free Fire Diamonds',
+    products: [
+      { name: '🔥 50 Diamonds',    finalPrice: 1000 },
+      { name: '🔥 100 Diamonds',   finalPrice: 2000 },
+      { name: '🔥 210 Diamonds',   finalPrice: 4000 },
+      { name: '🔥 310 Diamonds',   finalPrice: 6000 },
+      { name: '🔥 520 Diamonds',   finalPrice: 10000 },
+      { name: '🔥 1060 Diamonds',  finalPrice: 20000 },
+      { name: '🔥 2180 Diamonds',  finalPrice: 40000 },
+      { name: '🔥 5600 Diamonds',  finalPrice: 100000 },
+      { name: '🔥 Weekly Pass',    finalPrice: 3000 },
+    ],
+  },
+  genshin: {
+    label: '⚔️ Genshin Impact Genesis Crystals',
+    products: [
+      { name: '⚔️ 60 Crystals',   finalPrice: 2000 },
+      { name: '⚔️ 300 Crystals',  finalPrice: 9000 },
+      { name: '⚔️ 980 Crystals',  finalPrice: 28000 },
+      { name: '⚔️ 1980 Crystals', finalPrice: 55000 },
+      { name: '⚔️ 3280 Crystals', finalPrice: 90000 },
+      { name: '⚔️ 6480 Crystals', finalPrice: 176000 },
+    ],
+  },
+  hok: {
+    label: '👑 Honor of Kings Tokens',
+    products: [
+      { name: '👑 50 Tokens',   finalPrice: 1500 },
+      { name: '👑 100 Tokens',  finalPrice: 3000 },
+      { name: '👑 250 Tokens',  finalPrice: 7000 },
+      { name: '👑 500 Tokens',  finalPrice: 14000 },
+      { name: '👑 1000 Tokens', finalPrice: 27000 },
+    ],
+  },
+  valorant: {
+    label: '🎯 Valorant VP',
+    products: [
+      { name: '🎯 125 VP',   finalPrice: 3000 },
+      { name: '🎯 420 VP',   finalPrice: 9000 },
+      { name: '🎯 700 VP',   finalPrice: 15000 },
+      { name: '🎯 1375 VP',  finalPrice: 28000 },
+      { name: '🎯 2050 VP',  finalPrice: 42000 },
+      { name: '🎯 3650 VP',  finalPrice: 73000 },
+      { name: '🎯 5350 VP',  finalPrice: 105000 },
+    ],
+  },
+  lol_wild: {
+    label: '🃏 Wild Rift Wild Cores',
+    products: [
+      { name: '🃏 110 Wild Cores',  finalPrice: 3000 },
+      { name: '🃏 570 Wild Cores',  finalPrice: 14000 },
+      { name: '🃏 1000 Wild Cores', finalPrice: 24000 },
+      { name: '🃏 2175 Wild Cores', finalPrice: 49000 },
+      { name: '🃏 3600 Wild Cores', finalPrice: 80000 },
+    ],
+  },
+};
+
 // ── Bulk product parser ────────────────────────────────────────────────────────
 // Parses lines like:
 //   💎 86 - 5000 ks
@@ -214,11 +311,65 @@ module.exports = (bot) => {
     await ctx.answerCbQuery();
     const catalog = await Catalog.findById(ctx.match[1]);
     if (!catalog) return ctx.reply('❌ Catalog not found.');
-    ctx.session.catalogAction = 'bulk_paste';
     ctx.session.bulkCatalogId = catalog._id.toString();
     ctx.session.bulkCatalogName = catalog.name;
+
+    // Show choice: use template or paste manually
+    const templateButtons = Object.entries(CATALOG_TEMPLATES).map(([key, tpl]) => [
+      Markup.button.callback(tpl.label, `bulk_tpl:${key}`),
+    ]);
+
     await ctx.reply(
-      `📦 *Bulk Add — ${catalog.name}*\n\nPaste your product list, one per line:\n\n` +
+      `📦 *Bulk Add — ${catalog.name}*\n\nChoose how to add products:`,
+      {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard([
+          ...templateButtons,
+          [Markup.button.callback('✍️ Paste My Own List', `bulk_manual:${catalog._id}`)],
+          [Markup.button.callback('❌ Cancel', 'bulk_cancel')],
+        ]),
+      }
+    );
+  });
+
+  // ── Template selected — preview & confirm ─────────────────────────────────
+  bot.action(/^bulk_tpl:(.+)$/, adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    const key = ctx.match[1];
+    const tpl = CATALOG_TEMPLATES[key];
+    if (!tpl) return ctx.reply('❌ Template not found.');
+
+    const catalogId = ctx.session.bulkCatalogId;
+    const catalogName = ctx.session.bulkCatalogName;
+    if (!catalogId) return ctx.reply('❌ No catalog selected. Start again.');
+
+    ctx.session.bulkProductsDraft = tpl.products;
+    ctx.session.catalogAction = 'bulk_pending_confirm';
+
+    const preview = tpl.products
+      .slice(0, 20)
+      .map((p, i) => `${i + 1}\\. *${p.name}* — ${p.finalPrice.toLocaleString()} KS`)
+      .join('\n');
+    const more = tpl.products.length > 20 ? `\n_... and ${tpl.products.length - 20} more_` : '';
+
+    await ctx.reply(
+      `📋 *Template Preview — ${tpl.label}*\n\n${preview}${more}\n\nCatalog: *${catalogName}*\n\n_Prices shown are defaults — you can edit each product after import._\n\nConfirm import?`,
+      {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard([
+          [Markup.button.callback('✅ Import Template', `bulk_confirm:${catalogId}`)],
+          [Markup.button.callback('❌ Cancel', 'bulk_cancel')],
+        ]),
+      }
+    );
+  });
+
+  // ── Manual paste ──────────────────────────────────────────────────────────
+  bot.action(/^bulk_manual:(.+)$/, adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    ctx.session.catalogAction = 'bulk_paste';
+    await ctx.reply(
+      `📦 *Bulk Add — ${ctx.session.bulkCatalogName}*\n\nPaste your product list, one per line:\n\n` +
       `Format: \`Product Name - Price\`\n\nExamples:\n` +
       `\`💎 86 Diamonds - 5000\`\n` +
       `\`💎 172 Diamonds - 10000\`\n` +

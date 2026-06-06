@@ -673,11 +673,15 @@ module.exports = function registerAdmin(bot) {
     const p = await Product.findById(ctx.match[1]);
     if (!p) return ctx.reply('❌ Product not found.');
     const photoStatus = p.imageUrl ? '🖼 Photo: ✅ Set' : '🖼 Photo: ➕ Add';
+    const flashLine = p.flashSalePrice
+      ? `⚡ Flash Sale: ${price(p.flashSalePrice)}\n`
+      : '';
     await ctx.reply(
       `📦 *${p.name}*\n\n` +
       `📁 Category: ${p.category}\n` +
-      `🌍 Region: ${p.region}\n` +
+      `🌍 Region: ${p.region || 'Global'}\n` +
       `💰 Price: ${price(p.finalPrice)}\n` +
+      `${flashLine}` +
       `📦 Stock: ${p.stockCount === -1 ? '∞ Unlimited' : p.stockCount}\n` +
       `Status: ${p.isActive ? '✅ Active' : '🔴 Inactive'}\n` +
       `${photoStatus}\n` +
@@ -685,6 +689,7 @@ module.exports = function registerAdmin(bot) {
       {
         parse_mode: 'Markdown',
         ...Markup.inlineKeyboard([
+          [Markup.button.callback('✏️ Edit Fields', `ap_edit:${p._id}`)],
           [Markup.button.callback(p.isActive ? '🔴 Deactivate' : '✅ Activate', `ap_toggle:${p._id}`)],
           [Markup.button.callback('📸 Set Photo', `ap_photo:${p._id}`)],
           [Markup.button.callback('🗑 Delete', `ap_delete_ask:${p._id}`)],
@@ -692,6 +697,100 @@ module.exports = function registerAdmin(bot) {
         ]),
       }
     );
+  });
+
+  // ── Product Edit — field selector ─────────────────────────────────────────
+  bot.action(/^ap_edit:(.+)$/, adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    const id = ctx.match[1];
+    const p = await Product.findById(id);
+    if (!p) return ctx.reply('❌ Product not found.');
+    await ctx.reply(
+      `✏️ *Edit: ${p.name}*\n\nWhich field do you want to edit?`,
+      {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard([
+          [Markup.button.callback('✏️ Name',        `ap_ef:${id}:name`)],
+          [Markup.button.callback('💰 Price (KS)',   `ap_ef:${id}:price`)],
+          [Markup.button.callback('📝 Description',  `ap_ef:${id}:description`)],
+          [Markup.button.callback('📁 Category',     `ap_ef:${id}:category`)],
+          [Markup.button.callback('📦 Stock Count',  `ap_ef:${id}:stock`)],
+          [Markup.button.callback('🌍 Region',       `ap_ef:${id}:region`)],
+          [Markup.button.callback('🔙 Back',         `ap_view:${id}`)],
+        ]),
+      }
+    );
+  });
+
+  // ── Product Edit — field prompt ────────────────────────────────────────────
+  bot.action(/^ap_ef:([^:]+):(.+)$/, adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    const [, id, field] = ctx.match;
+    const p = await Product.findById(id);
+    if (!p) return ctx.reply('❌ Product not found.');
+    const fieldLabels = {
+      name:        'Name',
+      price:       'Price (in KS, numbers only)',
+      description: 'Description (or send `-` to clear)',
+      category:    'Category',
+      stock:       'Stock Count (-1 for unlimited)',
+      region:      'Region (e.g. Global, SEA, MY)',
+    };
+    const current = {
+      name:        p.name,
+      price:       p.finalPrice,
+      description: p.description || '—',
+      category:    p.category,
+      stock:       p.stockCount,
+      region:      p.region || 'Global',
+    };
+    ctx.session.editProductField = { id, field };
+    await ctx.reply(
+      `✏️ *Edit ${fieldLabels[field]}*\n\nCurrent value: \`${current[field]}\`\n\nSend the new value:\n_Send /cancel to abort._`,
+      { parse_mode: 'Markdown' }
+    );
+  });
+
+  // ── Product Toggle Active ─────────────────────────────────────────────────
+  bot.action(/^ap_toggle:(.+)$/, adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    const p = await Product.findById(ctx.match[1]);
+    if (!p) return ctx.reply('❌ Product not found.');
+    p.isActive = !p.isActive;
+    await p.save();
+    await auditLog(ctx.from.id, 'PRODUCT_TOGGLE', p._id.toString(), 'Product', { isActive: p.isActive });
+    await ctx.reply(`${p.isActive ? '✅' : '🔴'} *${p.name}* is now ${p.isActive ? 'Active' : 'Inactive'}.`, {
+      parse_mode: 'Markdown',
+      ...Markup.inlineKeyboard([[Markup.button.callback('📦 Back to Product', `ap_view:${p._id}`)]]),
+    });
+  });
+
+  // ── Product Delete — confirm ───────────────────────────────────────────────
+  bot.action(/^ap_delete_ask:(.+)$/, adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    const p = await Product.findById(ctx.match[1]);
+    if (!p) return ctx.reply('❌ Product not found.');
+    await ctx.reply(
+      `🗑 *Delete "${p.name}"?*\n\nThis cannot be undone.`,
+      {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard([
+          [Markup.button.callback('✅ Yes, Delete', `ap_delete_confirm:${p._id}`),
+           Markup.button.callback('❌ Cancel', `ap_view:${p._id}`)],
+        ]),
+      }
+    );
+  });
+
+  bot.action(/^ap_delete_confirm:(.+)$/, adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery('Deleting...');
+    const p = await Product.findByIdAndDelete(ctx.match[1]);
+    if (!p) return ctx.reply('❌ Product not found.');
+    await auditLog(ctx.from.id, 'PRODUCT_DELETE', p._id.toString(), 'Product', { name: p.name });
+    await ctx.reply(`🗑 *${p.name}* deleted.`, {
+      parse_mode: 'Markdown',
+      ...Markup.inlineKeyboard([[Markup.button.callback('📋 Products List', 'pm_list_products')]]),
+    });
   });
 
   bot.action(/^ap_photo:(.+)$/, adminOnly(), async (ctx) => {
@@ -903,13 +1002,64 @@ module.exports = function registerAdmin(bot) {
 
   // ── Manual price setter (from rate manager scene) ──────────────────────────
   bot.on('message', async (ctx, next) => {
-    // Cancel pending photo upload
-    if (ctx.session?.photoProductId && ctx.message?.text === '/cancel') {
-      ctx.session.photoProductId = null;
-      return ctx.reply('❌ Photo upload cancelled.');
+    const text = ctx.message?.text?.trim();
+
+    // Cancel any pending session
+    if (text === '/cancel') {
+      if (ctx.session?.photoProductId)   { ctx.session.photoProductId = null; return ctx.reply('❌ Photo upload cancelled.'); }
+      if (ctx.session?.editProductField) { ctx.session.editProductField = null; return ctx.reply('❌ Edit cancelled.'); }
     }
-    if (ctx.session?.rm_manual_product && ctx.message?.text) {
-      const p = parseInt(ctx.message.text.trim(), 10);
+
+    // ── Product field editor ────────────────────────────────────────────────
+    if (ctx.session?.editProductField && text) {
+      const { id, field } = ctx.session.editProductField;
+      ctx.session.editProductField = null;
+
+      const p = await Product.findById(id);
+      if (!p) return ctx.reply('❌ Product not found.');
+
+      try {
+        if (field === 'name') {
+          if (!text || text.length < 2) return ctx.reply('❌ Name must be at least 2 characters.');
+          p.name = text;
+        } else if (field === 'price') {
+          const val = parseFloat(text.replace(/,/g, ''));
+          if (isNaN(val) || val <= 0) return ctx.reply('❌ Enter a valid price (positive number).');
+          p.finalPrice = val;
+          p.baseCost = val;
+        } else if (field === 'description') {
+          p.description = text === '-' ? '' : text;
+        } else if (field === 'category') {
+          p.category = text;
+        } else if (field === 'stock') {
+          const val = parseInt(text, 10);
+          if (isNaN(val) || val < -1) return ctx.reply('❌ Enter -1 (unlimited) or a positive number.');
+          p.stockCount = val;
+        } else if (field === 'region') {
+          p.region = text;
+        }
+
+        await p.save();
+        await auditLog(ctx.from.id, 'PRODUCT_EDIT', id, 'Product', { field, value: text });
+
+        return ctx.reply(
+          `✅ *${p.name}* updated!\n\n*${field}* → \`${text}\``,
+          {
+            parse_mode: 'Markdown',
+            ...Markup.inlineKeyboard([
+              [Markup.button.callback('✏️ Edit More Fields', `ap_edit:${id}`)],
+              [Markup.button.callback('📦 View Product', `ap_view:${id}`)],
+            ]),
+          }
+        );
+      } catch (err) {
+        return ctx.reply(`❌ Save failed: ${err.message}`);
+      }
+    }
+
+    // ── Manual price setter (from rate manager scene) ───────────────────────
+    if (ctx.session?.rm_manual_product && text) {
+      const p = parseInt(text, 10);
       if (isNaN(p) || p <= 0) return ctx.reply('❌ Enter a positive integer.');
       const { setManualPrice } = require('../services/PriceCalculator');
       try {
@@ -924,6 +1074,7 @@ module.exports = function registerAdmin(bot) {
         return ctx.reply(`❌ ${err.message}`);
       }
     }
+
     return next();
   });
 };
