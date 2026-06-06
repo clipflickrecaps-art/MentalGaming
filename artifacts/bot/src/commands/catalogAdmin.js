@@ -429,9 +429,21 @@ module.exports = (bot) => {
   // ── Message handler — catalog field wizard + bulk paste ───────────────────
   bot.on('message', adminOnly(), async (ctx, next) => {
     const action = ctx.session?.catalogAction;
-    if (!action) return next();
-
     const text = ctx.message?.text?.trim();
+
+    // Session-less product list paste detection (e.g. after bot restart)
+    if (!action && text) {
+      const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+      const productLines = lines.filter(l => /^.+\s*[-–—]\s*[\d,]+/.test(l));
+      if (productLines.length >= 3) {
+        return ctx.reply(
+          `📦 *Product list detected!*\n\nSession expired (bot restarted). To import:\n\n1. *Manage Products → 📦 Bulk Import*\n2. Catalog ရွေး\n3. *✍️ Paste My Own List* tap\n4. List paste ထည့်\n\n_Your list is still in your clipboard — just paste it again after step 3._`,
+          { parse_mode: 'Markdown' }
+        );
+      }
+    }
+
+    if (!action) return next();
 
     // Cancel
     if (text === '/cancel') {
