@@ -261,15 +261,44 @@ async function bootstrap() {
   const { adminOnly } = require('./middlewares/adminCheck');
   bot.command('setmenu', adminOnly(), async (ctx) => {
     const url = getMiniAppUrl();
+    const envDiag =
+      `\`MINI_APP_URL\`: ${process.env.MINI_APP_URL || '_(not set)_'}\n` +
+      `\`REPLIT_DOMAINS\`: ${process.env.REPLIT_DOMAINS || '_(not set)_'}\n` +
+      `\`REPLIT_DEV_DOMAIN\`: ${process.env.REPLIT_DEV_DOMAIN || '_(not set)_'}`;
     if (!url) {
-      return ctx.reply('❌ No MINI_APP_URL configured. Set the MINI_APP_URL secret and restart the bot.');
+      return ctx.reply(
+        `❌ *No URL found* — cannot set menu button.\n\n${envDiag}\n\nSet the \`MINI_APP_URL\` secret to the landing page URL.`,
+        { parse_mode: 'Markdown' }
+      );
     }
+    const errors = [];
+    // 1. Set for this specific chat (takes effect immediately for this user)
     try {
-      await applyMiniAppMenuButton(ctx.telegram);
-      return ctx.reply(`✅ Menu button updated!\n\n🔗 URL: ${url}\n\nUsers will see "🛍 Open Store" button next to the text field.`);
+      await ctx.telegram.callApi('setChatMenuButton', {
+        chat_id: ctx.chat.id,
+        menu_button: { type: 'web_app', text: '🛍 Open Store', web_app: { url } },
+      });
     } catch (err) {
-      return ctx.reply(`❌ Failed: ${err.message}`);
+      errors.push(`Chat-specific: ${err.message}`);
     }
+    // 2. Set global default (applies to all future/new chats)
+    try {
+      await ctx.telegram.callApi('setChatMenuButton', {
+        menu_button: { type: 'web_app', text: '🛍 Open Store', web_app: { url } },
+      });
+    } catch (err) {
+      errors.push(`Global default: ${err.message}`);
+    }
+    if (errors.length) {
+      return ctx.reply(
+        `⚠️ *Partial failure*\n\`\`\`\n${errors.join('\n')}\n\`\`\`\n\nURL tried: \`${url}\`\n\n${envDiag}`,
+        { parse_mode: 'Markdown' }
+      );
+    }
+    return ctx.reply(
+      `✅ *Menu button set!*\n\n🔗 URL: \`${url}\`\n\nThe blue *🛍 Open Store* button should now appear to the left of the message input.\n_If not visible, close and reopen this chat._`,
+      { parse_mode: 'Markdown' }
+    );
   });
 
   // Flash sale watcher — every 60s
