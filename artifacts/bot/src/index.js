@@ -222,8 +222,33 @@ async function registerBotCommands() {
     { command: 'managerates',   description: '💱 Manage Rates (Owner)' },
     { command: 'rates',         description: '💹 Current Rates (Owner)' },
     { command: 'fetchrates',    description: '🔄 Fetch Live Rates (Owner)' },
+    { command: 'setmenu',       description: '🛍 Re-apply Mini App button (Owner)' },
   ]);
   console.log('[Bot] ✅ Command menu registered');
+}
+
+function getMiniAppUrl() {
+  if (process.env.MINI_APP_URL) return process.env.MINI_APP_URL;
+  const domains = process.env.REPLIT_DOMAINS;
+  if (domains) return `https://${domains.split(',')[0].trim()}/`;
+  if (process.env.REPLIT_DEV_DOMAIN) return `https://${process.env.REPLIT_DEV_DOMAIN}/`;
+  return null;
+}
+
+async function applyMiniAppMenuButton(telegram) {
+  const url = getMiniAppUrl();
+  if (!url) {
+    console.warn('[Bot] ⚠️  No MINI_APP_URL or REPLIT_DEV_DOMAIN set — menu button not configured');
+    return;
+  }
+  try {
+    await telegram.callApi('setMenuButton', {
+      menu_button: { type: 'web_app', text: '🛍 Open Store', web_app: { url } },
+    });
+    console.log(`[Bot] ✅ Menu button set → ${url}`);
+  } catch (err) {
+    console.warn('[Bot] ⚠️  setMenuButton failed:', err.message);
+  }
 }
 
 async function bootstrap() {
@@ -231,6 +256,21 @@ async function bootstrap() {
 
   await connectDB();
   loadCommands(bot);
+
+  // Owner-only: /setmenu — re-applies the Mini App menu button on demand
+  const { adminOnly } = require('./middlewares/adminCheck');
+  bot.command('setmenu', adminOnly(), async (ctx) => {
+    const url = getMiniAppUrl();
+    if (!url) {
+      return ctx.reply('❌ No MINI_APP_URL configured. Set the MINI_APP_URL secret and restart the bot.');
+    }
+    try {
+      await applyMiniAppMenuButton(ctx.telegram);
+      return ctx.reply(`✅ Menu button updated!\n\n🔗 URL: ${url}\n\nUsers will see "🛍 Open Store" button next to the text field.`);
+    } catch (err) {
+      return ctx.reply(`❌ Failed: ${err.message}`);
+    }
+  });
 
   // Flash sale watcher — every 60s
   const { startFlashSaleWatcher } = require('./services/FlashSaleService');
@@ -261,14 +301,7 @@ async function bootstrap() {
   await registerBotCommands();
 
   // Set the chat menu button to open the Mini App directly
-  const miniAppUrl =
-    process.env.MINI_APP_URL ||
-    (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}/` : null);
-  if (miniAppUrl) {
-    bot.telegram.callApi('setMenuButton', {
-      menu_button: { type: 'web_app', text: '🛍 Open Store', web_app: { url: miniAppUrl } },
-    }).catch((err) => console.warn('[Bot] setMenuButton failed:', err.message));
-  }
+  await applyMiniAppMenuButton(bot.telegram);
 
   // Global crash handler — must run AFTER launch so telegram client is ready
   setupGlobalErrorHandlers(bot.telegram);
