@@ -541,10 +541,67 @@ module.exports = function registerAdmin(bot) {
       {
         parse_mode: 'Markdown',
         ...Markup.inlineKeyboard([
-          [Markup.button.callback('📋 List Products', 'pm_list_products')],
-          [Markup.button.callback('➕ Add Product',   'admin_product_add')],
-          [Markup.button.callback('💱 Update Rates',  'open_rate_manager')],
-          [Markup.button.callback('🔙 Back',          'nav:go:admin_main')],
+          [Markup.button.callback('📋 List Products',        'pm_list_products')],
+          [Markup.button.callback('➕ Add Product',           'admin_product_add')],
+          [Markup.button.callback('🗑 Delete by Category',   'pm_del_by_cat')],
+          [Markup.button.callback('💱 Update Rates',          'open_rate_manager')],
+          [Markup.button.callback('🔙 Back',                  'nav:go:admin_main')],
+        ]),
+      }
+    );
+  });
+
+  // ── Delete all products in a category ────────────────────────────────────
+  bot.action('pm_del_by_cat', adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    const cats = await Product.aggregate([
+      { $group: { _id: '$category', count: { $sum: 1 } } },
+      { $sort: { _id: 1 } },
+    ]);
+    if (!cats.length) return ctx.reply('🛍️ No products in the database.');
+    const rows = cats.map((c) => [
+      Markup.button.callback(
+        `📁 ${c._id} (${c.count} products)`,
+        `pm_del_cat_ask:${encodeURIComponent(c._id)}`
+      ),
+    ]);
+    rows.push([Markup.button.callback('🔙 Back', 'admin_products_action')]);
+    await ctx.reply(
+      `🗑 *Delete Products by Category*\n\nSelect a category to delete ALL its products:\n_(Category itself will NOT be deleted)_`,
+      { parse_mode: 'Markdown', ...Markup.inlineKeyboard(rows) }
+    );
+  });
+
+  bot.action(/^pm_del_cat_ask:(.+)$/, adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    const cat = decodeURIComponent(ctx.match[1]);
+    const count = await Product.countDocuments({ category: cat });
+    await ctx.reply(
+      `⚠️ *Delete all products in "${cat}"?*\n\n🗑 *${count} product(s)* will be permanently deleted.\nThe category itself will remain.\n\nThis cannot be undone.`,
+      {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard([
+          [
+            Markup.button.callback(`✅ Yes, Delete ${count} products`, `pm_del_cat_confirm:${encodeURIComponent(cat)}`),
+          ],
+          [Markup.button.callback('❌ Cancel', 'pm_del_by_cat')],
+        ]),
+      }
+    );
+  });
+
+  bot.action(/^pm_del_cat_confirm:(.+)$/, adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery('Deleting...');
+    const cat = decodeURIComponent(ctx.match[1]);
+    const result = await Product.deleteMany({ category: cat });
+    await auditLog(ctx.from.id, 'BULK_DELETE_BY_CATEGORY', cat, 'Product', { deleted: result.deletedCount });
+    await ctx.reply(
+      `✅ *Done!* Deleted *${result.deletedCount}* product(s) from category *"${cat}"*.\n\nCategory itself was kept.`,
+      {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard([
+          [Markup.button.callback('🗑 Delete Another Category', 'pm_del_by_cat')],
+          [Markup.button.callback('📋 View Products', 'pm_list_products')],
         ]),
       }
     );
