@@ -242,7 +242,7 @@ async function applyMiniAppMenuButton(telegram) {
     return;
   }
   try {
-    await telegram.callApi('setMenuButton', {
+    await telegram.callApi('setChatMenuButton', {
       menu_button: { type: 'web_app', text: '🛍 Open Store', web_app: { url } },
     });
     console.log(`[Bot] ✅ Menu button set → ${url}`);

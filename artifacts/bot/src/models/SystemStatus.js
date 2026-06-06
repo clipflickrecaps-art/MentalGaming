@@ -127,7 +127,7 @@ const systemStatusSchema = new mongoose.Schema(
     // ── Mini App Reply-Keyboard Button ────────────────────────────────────────
     miniAppButtonEnabled: {
       type:    Boolean,
-      default: true,
+      default: false,
       comment: 'Show a persistent Reply-Keyboard WebApp button at the top of the main menu',
     },
     miniAppButtonText: {
