@@ -521,16 +521,28 @@ module.exports = (bot) => {
       return next();
     }
 
-    // ── Bulk product paste ────────────────────────────────────────────────
-    if (action === 'bulk_paste') {
+    // ── Bulk product paste (manual) ───────────────────────────────────────
+    if (action === 'bulk_paste' || action === 'bulk_pending_confirm') {
       if (!text) return ctx.reply('Please paste your product list:');
+
       const products = parseBulkProducts(text);
       if (!products.length) {
+        // In confirm state, a non-parseable message might just be a mistake — ignore and let buttons handle it
+        if (action === 'bulk_pending_confirm') return next();
         return ctx.reply(
           `❌ Could not parse any products.\n\nEach line must be:\n\`Product Name - Price\`\nExample: \`86 Diamonds - 5000\``,
           { parse_mode: 'Markdown' }
         );
       }
+
+      // If user pasted a list while in confirm state → treat as override (new manual import)
+      if (action === 'bulk_pending_confirm' && !ctx.session.bulkCatalogId) {
+        return ctx.reply(
+          `❌ Session expired. Please start again:\n\n*Manage Products → 📦 Bulk Import → select catalog → ✍️ Paste My Own List*`,
+          { parse_mode: 'Markdown' }
+        );
+      }
+
       ctx.session.bulkProductsDraft = products;
       ctx.session.catalogAction = 'bulk_pending_confirm';
 
@@ -539,9 +551,10 @@ module.exports = (bot) => {
         .map((p, i) => `${i + 1}. *${p.name}* — ${p.finalPrice.toLocaleString()} KS`)
         .join('\n');
       const more = products.length > 20 ? `\n_... and ${products.length - 20} more_` : '';
+      const catalogName = ctx.session.bulkCatalogName || 'Selected Catalog';
 
       await ctx.reply(
-        `📋 *Preview (${products.length} products)*\n\n${preview}${more}\n\nCatalog: *${ctx.session.bulkCatalogName}*\n\nConfirm import?`,
+        `📋 *Preview (${products.length} products)*\n\n${preview}${more}\n\nCatalog: *${catalogName}*\n\nConfirm import?`,
         {
           parse_mode: 'Markdown',
           ...Markup.inlineKeyboard([
