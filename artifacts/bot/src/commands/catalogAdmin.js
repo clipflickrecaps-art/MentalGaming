@@ -176,8 +176,8 @@ function parseBulkProducts(text) {
   const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
   const results = [];
   for (const line of lines) {
-    // Strip leading emoji/symbols
-    const clean = line.replace(/^[\p{Emoji}\s*#•\-]+/u, '').trim();
+    // Strip leading emoji/symbols (use Emoji_Presentation to avoid stripping digits 0-9)
+    const clean = line.replace(/^[\p{Emoji_Presentation}\s*#•\-]+/u, '').trim();
     // Try: "Name - Price unit" or "Name - Price"
     const match = clean.match(/^(.+?)\s*[-–—]\s*([\d,\.]+)\s*(ks|mmk|k)?$/i);
     if (!match) continue;
