@@ -336,7 +336,63 @@ module.exports = function registerAdminGameConfig(bot) {
   bot.action(/^ap_cat:(.+)$/, adminOnly(), async (ctx) => {
     await ctx.answerCbQuery();
     ctx.session.adminAddProduct = { step: 'name', category: ctx.match[1] };
-    await ctx.reply(`✅ Category: *${ctx.match[1]}*\n\nStep 2/4: Enter product name (e.g. "86 Diamonds"):`, { parse_mode: 'Markdown' });
+    await ctx.reply(
+      `✅ Category: *${ctx.match[1]}*\n\nStep 2/4: Enter product name (e.g. "86 Diamonds"):`,
+      {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard([
+          [Markup.button.callback('🔙 Back to Category', 'ap_back_to_cat'), Markup.button.callback('❌ Cancel', 'ap_cancel')],
+        ]),
+      }
+    );
+  });
+
+  bot.action('ap_back_to_cat', adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    ctx.session.adminAddProduct = { step: 'category' };
+    const rows = [
+      ['ML Diamonds',      'ML Weekly Pass',  'ML Starlight'],
+      ['FF Diamonds',      'FF Membership'],
+      ['PUBG UC',          'PUBG Royal Pass'],
+      ['Genshin Genesis',  'Genshin BP'],
+      ['Valorant Points',  'Valorant Premium'],
+      ['Google Play',      'App Store'],
+      ['Steam',            'Razer Gold'],
+    ].map((group) => group.map((cat) => Markup.button.callback(cat, `ap_cat:${cat}`)));
+    await ctx.reply(`🛍️ *Add New Product*\n\nStep 1/4: Select category:`, {
+      parse_mode: 'Markdown',
+      ...Markup.inlineKeyboard([...rows, [Markup.button.callback('❌ Cancel', 'ap_cancel')]]),
+    });
+  });
+
+  bot.action('ap_back_to_name', adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    const state = ctx.session.adminAddProduct || {};
+    ctx.session.adminAddProduct = { step: 'name', category: state.category };
+    await ctx.reply(
+      `✅ Category: *${state.category || '?'}*\n\nStep 2/4: Enter product name (e.g. "86 Diamonds"):`,
+      {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard([
+          [Markup.button.callback('🔙 Back to Category', 'ap_back_to_cat'), Markup.button.callback('❌ Cancel', 'ap_cancel')],
+        ]),
+      }
+    );
+  });
+
+  bot.action('ap_back_to_price', adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    const state = ctx.session.adminAddProduct || {};
+    ctx.session.adminAddProduct = { step: 'price', category: state.category, name: state.name };
+    await ctx.reply(
+      `✅ Name: *${state.name || '?'}*\n\nStep 3/4: Enter price in KS (e.g. \`5000\`):`,
+      {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard([
+          [Markup.button.callback('🔙 Back to Name', 'ap_back_to_name'), Markup.button.callback('❌ Cancel', 'ap_cancel')],
+        ]),
+      }
+    );
   });
 
   bot.action('ap_cancel', adminOnly(), async (ctx) => {
@@ -409,13 +465,29 @@ module.exports = function registerAdminGameConfig(bot) {
       if (addState.step === 'name') {
         if (input.length < 2 || input.length > 80) return ctx.reply('❌ Name must be 2–80 characters.');
         ctx.session.adminAddProduct = { ...addState, step: 'price', name: input };
-        return ctx.reply(`✅ Name: *${input}*\n\nStep 3/4: Enter price in KS (e.g. \`5000\`):`, { parse_mode: 'Markdown' });
+        return ctx.reply(
+          `✅ Name: *${input}*\n\nStep 3/4: Enter price in KS (e.g. \`5000\`):`,
+          {
+            parse_mode: 'Markdown',
+            ...Markup.inlineKeyboard([
+              [Markup.button.callback('🔙 Back to Name', 'ap_back_to_name'), Markup.button.callback('❌ Cancel', 'ap_cancel')],
+            ]),
+          }
+        );
       }
       if (addState.step === 'price') {
         const p = parseInt(input.replace(/,/g, ''), 10);
         if (isNaN(p) || p <= 0) return ctx.reply('❌ Enter a positive number.');
         ctx.session.adminAddProduct = { ...addState, step: 'description', price: p };
-        return ctx.reply(`✅ Price: *${price(p)}*\n\nStep 4/4: Enter description (or type \`skip\`):`, { parse_mode: 'Markdown' });
+        return ctx.reply(
+          `✅ Price: *${price(p)}*\n\nStep 4/4: Enter description (or type \`skip\`):`,
+          {
+            parse_mode: 'Markdown',
+            ...Markup.inlineKeyboard([
+              [Markup.button.callback('🔙 Back to Price', 'ap_back_to_price'), Markup.button.callback('❌ Cancel', 'ap_cancel')],
+            ]),
+          }
+        );
       }
       if (addState.step === 'description') {
         const desc = input.toLowerCase() === 'skip' ? '' : input;
