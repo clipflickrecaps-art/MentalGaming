@@ -773,6 +773,7 @@ module.exports = function registerAdmin(bot) {
           [Markup.button.callback('📁 Category',     `ap_ef:${id}:category`)],
           [Markup.button.callback('📦 Stock Count',  `ap_ef:${id}:stock`)],
           [Markup.button.callback('🌍 Region',       `ap_ef:${id}:region`)],
+          [Markup.button.callback('🔢 Max Qty/Order', `ap_ef:${id}:maxQuantity`)],
           [Markup.button.callback('🔙 Back',         `ap_view:${id}`)],
         ]),
       }
@@ -792,6 +793,7 @@ module.exports = function registerAdmin(bot) {
       category:    'Category',
       stock:       'Stock Count (-1 for unlimited)',
       region:      'Region (e.g. Global, SEA, MY)',
+      maxQuantity: 'Max Qty per Order (1 = no selector, 10 = max 10, 0 = unlimited)',
     };
     const current = {
       name:        p.name,
@@ -800,6 +802,7 @@ module.exports = function registerAdmin(bot) {
       category:    p.category,
       stock:       p.stockCount,
       region:      p.region || 'Global',
+      maxQuantity: p.maxQuantity ?? 'unlimited',
     };
     ctx.session.editProductField = { id, field };
     await ctx.reply(
@@ -1094,6 +1097,15 @@ module.exports = function registerAdmin(bot) {
           p.stockCount = val;
         } else if (field === 'region') {
           p.region = text;
+        } else if (field === 'maxQuantity') {
+          const val = parseInt(text, 10);
+          if (text === '0' || text.toLowerCase() === 'unlimited') {
+            p.maxQuantity = null;
+          } else if (isNaN(val) || val < 1) {
+            return ctx.reply('❌ Enter a number ≥ 1, or `0` for unlimited.');
+          } else {
+            p.maxQuantity = val;
+          }
         }
 
         await p.save();

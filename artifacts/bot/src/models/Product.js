@@ -27,6 +27,8 @@ const productSchema = new mongoose.Schema(
 
     stockCount:            { type: Number, default: -1, comment: '-1 = unlimited' },
     stockWarningThreshold: { type: Number, default: 5 },
+    // null = unlimited qty per order (UI shows up to 10); 1 = no qty selector; N = max N per order
+    maxQuantity:           { type: Number, default: null },
 
     pricingMode: { type: String, enum: ['Auto', 'Manual'], default: 'Auto' },
     isApiEnabled: { type: Boolean, default: false },

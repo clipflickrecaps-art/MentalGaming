@@ -115,6 +115,12 @@ const orderScene = new Scenes.WizardScene(
     // Resolve checkout fields once at session start
     const checkoutFields = await resolveCheckoutFields(product);
 
+    // How many can be ordered per transaction
+    const maxQty = (product.maxQuantity === null || product.maxQuantity === undefined) ? 0 : product.maxQuantity;
+    // 0 / null = unlimited (show up to 10 buttons); 1 = no selector; N = cap at N
+    const allowMultiple = maxQty !== 1;
+    const displayMax = maxQty === 0 ? 10 : Math.min(maxQty, 10);
+
     ctx.session.orderSession = {
       productId: product._id.toString(),
       productName: product.name,
@@ -124,24 +130,20 @@ const orderScene = new Scenes.WizardScene(
       isFlashSale,
       tierDiscount,
       tierDiscountPct,
-      effectivePrice: priceAfterTier,   // price after flash + tier, before promo
+      unitPrice: priceAfterTier,        // price per 1 unit (after flash + tier)
+      effectivePrice: priceAfterTier,   // total price (unit × qty), before promo
+      orderQuantity: 1,
+      maxQuantity: maxQty,
       gameName: product.category,
-      // Legacy fields (kept for backwards-compat with admin notify + bot scene)
       gameId: null,
       zoneId: null,
-      // Dynamic checkout fields
-      checkoutFields,            // [{key, label, fieldType, required, placeholder}]
-      checkoutData: {},          // {key: value} collected so far
-      checkoutFieldIndex: 0,     // which field we're currently collecting
+      checkoutFields,
+      checkoutData: {},
+      checkoutFieldIndex: 0,
       promoCode: null,
       promoDiscount: 0,
       finalAmount: priceAfterTier,
     };
-
-    const hasBalance = user.balanceKS >= priceAfterTier;
-    const balanceLine = hasBalance
-      ? `💰 Your Balance: ${theme.format.bold(price(user.balanceKS))} ✅`
-      : `💰 Your Balance: ${theme.format.bold(price(user.balanceKS))} ❌ _(Need ${price(priceAfterTier - user.balanceKS)} more)_`;
 
     const tierBadgeMap = { Silver: '🥈', Gold: '🥇', Platinum: '💎' };
     const flashLine = isFlashSale
@@ -151,43 +153,68 @@ const orderScene = new Scenes.WizardScene(
       ? [`${tierBadgeMap[tier]} ${tier} Discount (${tierDiscountPct}%): *−${price(tierDiscount)}*`]
       : [];
 
-    const text = buildMessage(theme, [{
-      title: '🛒 Order Summary',
+    const productInfoText = buildMessage(theme, [{
+      title: '🛒 Select Quantity',
       lines: [
         `${theme.emoji.item} *${product.name}*`,
         `🗂 Type: ${product.productType === 'DigitalCode' ? '🎁 Digital Code' : '🎮 Direct Top-up'}`,
         `🌍 Region: ${product.region}`,
         ...flashLine,
         isFlashSale
-          ? `${theme.emoji.money} Price: ~~${price(product.finalPrice)}~~ → *${price(effectivePrice)}*`
-          : `${theme.emoji.money} Price: ${theme.format.bold(price(product.finalPrice))}`,
+          ? `${theme.emoji.money} Unit Price: ~~${price(product.finalPrice)}~~ → *${price(effectivePrice)}*`
+          : `${theme.emoji.money} Unit Price: ${theme.format.bold(price(product.finalPrice))}`,
         ...tierLine,
-        tierDiscount > 0
-          ? `✨ Your Price: ${theme.format.bold(price(priceAfterTier))}`
-          : null,
+        tierDiscount > 0 ? `✨ Your Unit Price: ${theme.format.bold(price(priceAfterTier))}` : null,
         `📦 Stock: ${stockLabel}`,
+        maxQty > 1 ? `⚠️ _Max ${maxQty} per order_` : null,
         ``,
-        balanceLine,
+        `💰 Your Balance: ${theme.format.bold(price(user.balanceKS))}`,
+        ``,
+        allowMultiple ? `How many do you want to order?` : null,
       ].filter(Boolean),
     }]);
 
-    if (!hasBalance) {
-      await ctx.reply(text, {
+    // Single quantity — skip selector, show order summary directly
+    if (!allowMultiple) {
+      const hasBalance = user.balanceKS >= priceAfterTier;
+      if (!hasBalance) {
+        await ctx.reply(productInfoText, {
+          parse_mode: 'Markdown',
+          ...Markup.inlineKeyboard([
+            [Markup.button.callback('💳 Top Up Wallet', 'start_topup')],
+            [Markup.button.callback('❌ Cancel', 'order_cancel_scene')],
+          ]),
+        });
+        return ctx.scene.leave();
+      }
+      await ctx.reply(productInfoText, {
         parse_mode: 'Markdown',
         ...Markup.inlineKeyboard([
-          [Markup.button.callback('💳 Top Up Wallet', 'start_topup')],
+          [Markup.button.callback('▶️ Order Now', 'order_proceed')],
           [Markup.button.callback('❌ Cancel', 'order_cancel_scene')],
         ]),
       });
-      return ctx.scene.leave();
+      return ctx.wizard.next();
     }
 
-    await ctx.reply(text, {
+    // Multi-quantity — show selector buttons
+    const qtyButtons = [];
+    const row = [];
+    for (let i = 1; i <= displayMax; i++) {
+      const total = priceAfterTier * i;
+      const canAfford = user.balanceKS >= total;
+      row.push(Markup.button.callback(
+        `${i}× ${canAfford ? '' : '🔴'}`,
+        `order_qty:${i}`
+      ));
+      if (row.length === 5) { qtyButtons.push([...row]); row.length = 0; }
+    }
+    if (row.length) qtyButtons.push([...row]);
+    qtyButtons.push([Markup.button.callback('❌ Cancel', 'order_cancel_scene')]);
+
+    await ctx.reply(productInfoText, {
       parse_mode: 'Markdown',
-      ...Markup.inlineKeyboard([
-        [Markup.button.callback('▶️ Order Now', 'order_proceed')],
-        [Markup.button.callback('❌ Cancel', 'order_cancel_scene')],
-      ]),
+      ...Markup.inlineKeyboard(qtyButtons),
     });
 
     return ctx.wizard.next();
@@ -337,13 +364,17 @@ const orderScene = new Scenes.WizardScene(
       : [];
     const hasAnyDiscount = sess.tierDiscount > 0 || sess.promoDiscount > 0 || sess.isFlashSale;
 
+    const qty = sess.orderQuantity || 1;
+    const qtyLabel = qty > 1 ? ` × ${qty}` : '';
     const text = buildMessage(theme, [{
       title: '✅ Confirm Order',
       lines: [
-        `📦 *${sess.productName}*`,
+        `📦 *${sess.productName}*${qtyLabel}`,
         ...gameIdLine,
         ``,
-        `💰 Original Price: ${price(sess.originalPrice)}`,
+        qty > 1 ? `💰 Unit Price: ${price(sess.unitPrice || sess.originalPrice)}` : null,
+        qty > 1 ? `🔢 Quantity: ${qty}` : null,
+        `💰 Original${qty > 1 ? ' Total' : ''}: ${price(sess.originalPrice * qty)}`,
         ...flashLine,
         ...tierLine,
         ...promoLine,
@@ -393,6 +424,95 @@ async function askForField(ctx, field) {
     }
   );
 }
+
+// ── Action: Quantity selected ───────────────────────────────────────────────────
+orderScene.action(/^order_qty:(\d+)$/, async (ctx) => {
+  await ctx.answerCbQuery();
+  const qty = parseInt(ctx.match[1], 10);
+  const sess = ctx.session.orderSession;
+  if (!sess) { await ctx.reply('❌ Session expired.'); return ctx.scene.leave(); }
+
+  const user = await User.findByTelegramId(ctx.from.id);
+  const theme = getTheme(ctx.user);
+
+  // Validate qty against maxQuantity
+  if (sess.maxQuantity > 0 && qty > sess.maxQuantity) {
+    return ctx.answerCbQuery(`❌ Max ${sess.maxQuantity} per order`, { show_alert: true });
+  }
+
+  const totalPrice = sess.unitPrice * qty;
+  sess.orderQuantity = qty;
+  sess.effectivePrice = totalPrice;
+  sess.finalAmount = totalPrice;
+
+  const hasBalance = user.balanceKS >= totalPrice;
+  const tierBadgeMap = { Silver: '🥈', Gold: '🥇', Platinum: '💎' };
+  const userTier = user?.membershipTier || 'Silver';
+  const tierLine = sess.tierDiscount > 0
+    ? [`${tierBadgeMap[userTier]} ${userTier} Discount (per unit): −${price(sess.tierDiscount)}`]
+    : [];
+
+  const summaryText = buildMessage(theme, [{
+    title: '🛒 Order Summary',
+    lines: [
+      `${theme.emoji.item} *${sess.productName}* × ${qty}`,
+      ...tierLine,
+      `${theme.emoji.money} Unit Price: ${price(sess.unitPrice)}`,
+      qty > 1 ? `✨ Total: *${price(totalPrice)}*` : null,
+      ``,
+      hasBalance
+        ? `💰 Your Balance: ${theme.format.bold(price(user.balanceKS))} ✅`
+        : `💰 Your Balance: ${theme.format.bold(price(user.balanceKS))} ❌ _(Need ${price(totalPrice - user.balanceKS)} more)_`,
+    ].filter(Boolean),
+  }]);
+
+  await ctx.editMessageReplyMarkup({ inline_keyboard: [] }).catch(() => {});
+
+  if (!hasBalance) {
+    await ctx.reply(summaryText, {
+      parse_mode: 'Markdown',
+      ...Markup.inlineKeyboard([
+        [Markup.button.callback('💳 Top Up Wallet', 'start_topup')],
+        [Markup.button.callback('🔙 Change Quantity', 'order_change_qty')],
+        [Markup.button.callback('❌ Cancel', 'order_cancel_scene')],
+      ]),
+    });
+    return;
+  }
+
+  await ctx.reply(summaryText, {
+    parse_mode: 'Markdown',
+    ...Markup.inlineKeyboard([
+      [Markup.button.callback(`▶️ Order ${qty}× Now`, 'order_proceed')],
+      [Markup.button.callback('🔙 Change Quantity', 'order_change_qty')],
+      [Markup.button.callback('❌ Cancel', 'order_cancel_scene')],
+    ]),
+  });
+});
+
+// ── Action: Change quantity (re-show selector) ──────────────────────────────────
+orderScene.action('order_change_qty', async (ctx) => {
+  await ctx.answerCbQuery();
+  await ctx.editMessageReplyMarkup({ inline_keyboard: [] }).catch(() => {});
+  const sess = ctx.session.orderSession;
+  if (!sess) { await ctx.reply('❌ Session expired.'); return ctx.scene.leave(); }
+  const user = await User.findByTelegramId(ctx.from.id);
+  const displayMax = sess.maxQuantity === 0 ? 10 : Math.min(sess.maxQuantity || 10, 10);
+  const qtyButtons = [];
+  const row = [];
+  for (let i = 1; i <= displayMax; i++) {
+    const total = sess.unitPrice * i;
+    const canAfford = user.balanceKS >= total;
+    row.push(Markup.button.callback(`${i}× ${canAfford ? '' : '🔴'}`, `order_qty:${i}`));
+    if (row.length === 5) { qtyButtons.push([...row]); row.length = 0; }
+  }
+  if (row.length) qtyButtons.push([...row]);
+  qtyButtons.push([Markup.button.callback('❌ Cancel', 'order_cancel_scene')]);
+  await ctx.reply(
+    `🔢 *Select Quantity*\n\n📦 *${sess.productName}*\n💰 Unit Price: ${price(sess.unitPrice)}\n💳 Your Balance: ${price(user.balanceKS)}\n\n🔴 = insufficient balance`,
+    { parse_mode: 'Markdown', ...Markup.inlineKeyboard(qtyButtons) }
+  );
+});
 
 // ── Action: Proceed to game ID step ────────────────────────────────────────────
 orderScene.action('order_proceed', async (ctx) => {
@@ -457,7 +577,7 @@ orderScene.action('order_final_confirm', async (ctx) => {
       { label: 'Notifying admin',       delay: 600 },
     ],
       `✅ *Order placed!*\n\n` +
-      `📦 ${sess.productName}\n` +
+      `📦 ${sess.productName}${(sess.orderQuantity || 1) > 1 ? ` × ${sess.orderQuantity}` : ''}\n` +
       `💰 ${price(sess.finalAmount)} deducted\n\n` +
       `_Your order is Pending. You'll be notified once it's complete._`
     );
@@ -558,10 +678,10 @@ async function notifyAdmin(ctx, order, sess) {
     `🔔 *New Order — Action Required*\n\n` +
     `🆔 Order: \`${shortId}\`\n` +
     `👤 Customer: ${userTag} *(${user.first_name})*\n` +
-    `📦 Product: *${sess.productName}*\n` +
+    `📦 Product: *${sess.productName}*${(sess.orderQuantity || 1) > 1 ? ` × ${sess.orderQuantity}` : ''}\n` +
     `🗂 Type: ${typeIcon}` +
     deliveryLines +
-    `\n💰 Original: ${price(sess.originalPrice)}` +
+    `\n💰 Original: ${price(sess.originalPrice * (sess.orderQuantity || 1))}` +
     flashSaleLine +
     tierLine +
     promoLine +
