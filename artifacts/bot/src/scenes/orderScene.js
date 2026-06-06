@@ -27,6 +27,30 @@ const Product = require('../models/Product');
 const Catalog = require('../models/Catalog');
 const User = require('../models/User');
 
+// ── Helper: build quantity selector keyboard ───────────────────────────────────
+// maxQty: 0/null = unlimited, N = cap
+// Shows 1–N inline buttons when N ≤ 10, otherwise 1–5 shortcuts + ✏️ Custom button
+function buildQtyButtons(unitPrice, balanceKS, maxQty) {
+  const useInlineOnly = maxQty >= 1 && maxQty <= 10;
+  const shortcutCount = useInlineOnly ? maxQty : 5;
+  const buttons = [];
+  const row = [];
+  for (let i = 1; i <= shortcutCount; i++) {
+    const total = unitPrice * i;
+    const canAfford = balanceKS >= total;
+    row.push(Markup.button.callback(`${i}× ${canAfford ? '' : '🔴'}`, `order_qty:${i}`));
+    if (row.length === 5) { buttons.push([...row]); row.length = 0; }
+  }
+  if (row.length) buttons.push([...row]);
+  if (!useInlineOnly) {
+    // Show custom input button for unlimited or maxQty > 10
+    const label = maxQty > 10 ? `✏️ Custom (max ${maxQty})` : '✏️ Custom Qty';
+    buttons.push([Markup.button.callback(label, 'order_custom_qty')]);
+  }
+  buttons.push([Markup.button.callback('❌ Cancel', 'order_cancel_scene')]);
+  return buttons;
+}
+
 // ── Games that require Zone ID (legacy — kept for products with no catalog) ───
 const ZONE_REQUIRED = ['mobile legends', 'ml', 'moonton'];
 
@@ -116,10 +140,12 @@ const orderScene = new Scenes.WizardScene(
     const checkoutFields = await resolveCheckoutFields(product);
 
     // How many can be ordered per transaction
+    // null/0 = unlimited, 1 = no selector, N = cap at N
     const maxQty = (product.maxQuantity === null || product.maxQuantity === undefined) ? 0 : product.maxQuantity;
-    // 0 / null = unlimited (show up to 10 buttons); 1 = no selector; N = cap at N
     const allowMultiple = maxQty !== 1;
-    const displayMax = maxQty === 0 ? 10 : Math.min(maxQty, 10);
+    // Show inline buttons if maxQty ≤ 10; otherwise show preset shortcuts + Custom input
+    const useButtons = maxQty > 1 && maxQty <= 10;
+    const buttonCount = useButtons ? maxQty : 5; // 1–5 as shortcuts when unlimited/large
 
     ctx.session.orderSession = {
       productId: product._id.toString(),
@@ -197,20 +223,8 @@ const orderScene = new Scenes.WizardScene(
       return ctx.wizard.next();
     }
 
-    // Multi-quantity — show selector buttons
-    const qtyButtons = [];
-    const row = [];
-    for (let i = 1; i <= displayMax; i++) {
-      const total = priceAfterTier * i;
-      const canAfford = user.balanceKS >= total;
-      row.push(Markup.button.callback(
-        `${i}× ${canAfford ? '' : '🔴'}`,
-        `order_qty:${i}`
-      ));
-      if (row.length === 5) { qtyButtons.push([...row]); row.length = 0; }
-    }
-    if (row.length) qtyButtons.push([...row]);
-    qtyButtons.push([Markup.button.callback('❌ Cancel', 'order_cancel_scene')]);
+    // Multi-quantity — show selector buttons + optional Custom input
+    const qtyButtons = buildQtyButtons(priceAfterTier, user.balanceKS, maxQty);
 
     await ctx.reply(productInfoText, {
       parse_mode: 'Markdown',
@@ -490,6 +504,20 @@ orderScene.action(/^order_qty:(\d+)$/, async (ctx) => {
   });
 });
 
+// ── Action: Custom quantity — prompt user to type a number ─────────────────────
+orderScene.action('order_custom_qty', async (ctx) => {
+  await ctx.answerCbQuery();
+  await ctx.editMessageReplyMarkup({ inline_keyboard: [] }).catch(() => {});
+  const sess = ctx.session.orderSession;
+  if (!sess) { await ctx.reply('❌ Session expired.'); return ctx.scene.leave(); }
+  sess.awaitingCustomQty = true;
+  const maxNote = sess.maxQuantity > 0 ? ` (max ${sess.maxQuantity})` : '';
+  await ctx.reply(
+    `🔢 *Enter Quantity*${maxNote}\n\n📦 *${sess.productName}*\n💰 Unit Price: ${price(sess.unitPrice)}\n\n_Type the number of units you want to order:_`,
+    { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('❌ Cancel', 'order_cancel_scene')]]) }
+  );
+});
+
 // ── Action: Change quantity (re-show selector) ──────────────────────────────────
 orderScene.action('order_change_qty', async (ctx) => {
   await ctx.answerCbQuery();
@@ -497,21 +525,67 @@ orderScene.action('order_change_qty', async (ctx) => {
   const sess = ctx.session.orderSession;
   if (!sess) { await ctx.reply('❌ Session expired.'); return ctx.scene.leave(); }
   const user = await User.findByTelegramId(ctx.from.id);
-  const displayMax = sess.maxQuantity === 0 ? 10 : Math.min(sess.maxQuantity || 10, 10);
-  const qtyButtons = [];
-  const row = [];
-  for (let i = 1; i <= displayMax; i++) {
-    const total = sess.unitPrice * i;
-    const canAfford = user.balanceKS >= total;
-    row.push(Markup.button.callback(`${i}× ${canAfford ? '' : '🔴'}`, `order_qty:${i}`));
-    if (row.length === 5) { qtyButtons.push([...row]); row.length = 0; }
-  }
-  if (row.length) qtyButtons.push([...row]);
-  qtyButtons.push([Markup.button.callback('❌ Cancel', 'order_cancel_scene')]);
+  const qtyButtons = buildQtyButtons(sess.unitPrice, user.balanceKS, sess.maxQuantity || 0);
   await ctx.reply(
     `🔢 *Select Quantity*\n\n📦 *${sess.productName}*\n💰 Unit Price: ${price(sess.unitPrice)}\n💳 Your Balance: ${price(user.balanceKS)}\n\n🔴 = insufficient balance`,
     { parse_mode: 'Markdown', ...Markup.inlineKeyboard(qtyButtons) }
   );
+});
+
+// ── Scene-level text handler: custom qty input ─────────────────────────────────
+orderScene.on('text', async (ctx, next) => {
+  const sess = ctx.session.orderSession;
+  if (!sess || !sess.awaitingCustomQty) return next();
+
+  sess.awaitingCustomQty = false;
+  const val = parseInt(ctx.message.text.trim(), 10);
+  if (isNaN(val) || val < 1) {
+    return ctx.reply('❌ Please enter a valid number ≥ 1.');
+  }
+  if (sess.maxQuantity > 0 && val > sess.maxQuantity) {
+    return ctx.reply(`❌ Max allowed is ${sess.maxQuantity} per order.`);
+  }
+
+  const user = await User.findByTelegramId(ctx.from.id);
+  const theme = getTheme(ctx.user);
+  const totalPrice = sess.unitPrice * val;
+  sess.orderQuantity = val;
+  sess.effectivePrice = totalPrice;
+  sess.finalAmount = totalPrice;
+
+  const hasBalance = user.balanceKS >= totalPrice;
+  const summaryText = buildMessage(theme, [{
+    title: '🛒 Order Summary',
+    lines: [
+      `📦 *${sess.productName}* × ${val}`,
+      `${theme.emoji.money} Unit Price: ${price(sess.unitPrice)}`,
+      val > 1 ? `✨ Total: *${price(totalPrice)}*` : null,
+      ``,
+      hasBalance
+        ? `💰 Your Balance: ${theme.format.bold(price(user.balanceKS))} ✅`
+        : `💰 Your Balance: ${theme.format.bold(price(user.balanceKS))} ❌ _(Need ${price(totalPrice - user.balanceKS)} more)_`,
+    ].filter(Boolean),
+  }]);
+
+  if (!hasBalance) {
+    return ctx.reply(summaryText, {
+      parse_mode: 'Markdown',
+      ...Markup.inlineKeyboard([
+        [Markup.button.callback('💳 Top Up Wallet', 'start_topup')],
+        [Markup.button.callback('🔙 Change Quantity', 'order_change_qty')],
+        [Markup.button.callback('❌ Cancel', 'order_cancel_scene')],
+      ]),
+    });
+  }
+
+  return ctx.reply(summaryText, {
+    parse_mode: 'Markdown',
+    ...Markup.inlineKeyboard([
+      [Markup.button.callback(`▶️ Order ${val}× Now`, 'order_proceed')],
+      [Markup.button.callback('🔙 Change Quantity', 'order_change_qty')],
+      [Markup.button.callback('❌ Cancel', 'order_cancel_scene')],
+    ]),
+  });
 });
 
 // ── Action: Proceed to game ID step ────────────────────────────────────────────
