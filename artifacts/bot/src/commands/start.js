@@ -170,30 +170,20 @@ module.exports = function registerStart(bot) {
       panel += `\n${notice}`;
     }
 
-    // ── Mini App WebApp button ────────────────────────────────────────────
-    const miniAppUrl =
+    // ── Resolve Mini App Reply-Keyboard config ────────────────────────────
+    const status = await SystemStatus.get();
+    const resolvedUrl =
+      status.miniAppButtonUrl ||
       process.env.MINI_APP_URL ||
+      (process.env.REPLIT_DOMAINS ? `https://${process.env.REPLIT_DOMAINS.split(',')[0].trim()}/` : null) ||
       (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}/` : null);
-
-    if (miniAppUrl) {
-      try {
-        await ctx.reply(
-          '✨ *Open the new Mini App store*',
-          {
-            parse_mode: 'Markdown',
-            ...Markup.inlineKeyboard([
-              [Markup.button.webApp('🛍 Open Mental Gaming Store', miniAppUrl)],
-            ]),
-          }
-        );
-      } catch (err) {
-        console.warn('[start] Mini App button failed:', err.message);
-      }
-    }
+    const webAppConfig = (!isAdmin && status.miniAppButtonEnabled !== false && resolvedUrl)
+      ? { enabled: true, text: status.miniAppButtonText || '🛍️ Mental Gaming Store', url: resolvedUrl }
+      : null;
 
     return ctx.reply(panel, {
       parse_mode: 'Markdown',
-      ...(isAdmin ? adminMenuKeyboard() : mainMenuKeyboard(ctx)),
+      ...(isAdmin ? adminMenuKeyboard() : mainMenuKeyboard(ctx, webAppConfig)),
     });
   });
 };

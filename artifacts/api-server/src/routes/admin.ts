@@ -344,6 +344,11 @@ router.patch("/admin/topups/:id/approve", telegramAuth, adminAuth, async (req, r
 
     res.json({ ok: true, amountKS, bonusCoins, newTier });
   } catch (err) {
+    // Race condition: two concurrent approve requests — treat as already approved
+    if ((err as any)?.code === 11000) {
+      res.status(409).json({ error: "Already approved" });
+      return;
+    }
     logger.error({ err }, "admin topup approve error");
     res.status(500).json({ error: "Internal error" });
   }

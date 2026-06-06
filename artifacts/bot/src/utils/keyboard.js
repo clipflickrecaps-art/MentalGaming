@@ -1,16 +1,21 @@
 const { Markup } = require('telegraf');
 const { t } = require('./i18n');
 
-function mainMenuKeyboard(ctxOrLang) {
+function mainMenuKeyboard(ctxOrLang, webAppConfig = null) {
   const L = (k) => t(ctxOrLang, k);
-  return Markup.keyboard([
+  const rows = [];
+  if (webAppConfig?.enabled && webAppConfig?.url) {
+    rows.push([{ text: webAppConfig.text || '🛍️ Mental Gaming Store', web_app: { url: webAppConfig.url } }]);
+  }
+  rows.push(
     [L('menu.shop'),     L('menu.orders')],
     [L('menu.wallet'),   L('menu.profile')],
     [L('menu.checkin'),  L('menu.spin')],
     [L('menu.promo'),    L('menu.referral')],
     [L('menu.gameids'),  L('menu.faq')],
     [L('menu.support'),  L('menu.settings')],
-  ]).resize();
+  );
+  return Markup.keyboard(rows).resize();
 }
 
 function adminMenuKeyboard() {

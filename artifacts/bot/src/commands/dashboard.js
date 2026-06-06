@@ -115,6 +115,7 @@ module.exports = function registerDashboard(bot) {
           [Markup.button.callback('📊 Analytics', 'dashboard_analytics')],
           [Markup.button.callback('💱 Manage Rates', 'open_rate_manager')],
           [Markup.button.callback('🖥 System Health', 'dashboard_syshealth')],
+          [Markup.button.callback('🛍️ Mini App Button', 'miniapp_panel')],
         ]),
       });
     } catch (err) {
@@ -134,6 +135,7 @@ module.exports = function registerDashboard(bot) {
           [Markup.button.callback('📊 Analytics', 'dashboard_analytics')],
           [Markup.button.callback('💱 Manage Rates', 'open_rate_manager')],
           [Markup.button.callback('🖥 System Health', 'dashboard_syshealth')],
+          [Markup.button.callback('🛍️ Mini App Button', 'miniapp_panel')],
         ]),
       });
     } catch (err) {
@@ -154,6 +156,7 @@ module.exports = function registerDashboard(bot) {
           [Markup.button.callback('📊 Analytics', 'dashboard_analytics')],
           [Markup.button.callback('💱 Manage Rates', 'open_rate_manager')],
           [Markup.button.callback('🖥 System Health', 'dashboard_syshealth')],
+          [Markup.button.callback('🛍️ Mini App Button', 'miniapp_panel')],
         ]),
       });
     } catch (err) {
@@ -234,5 +237,78 @@ module.exports = function registerDashboard(bot) {
         ...Markup.inlineKeyboard([[Markup.button.callback('🔙 Dashboard', 'dashboard_refresh')]]),
       }
     );
+  });
+
+  // ── Mini App Button Admin Panel ─────────────────────────────────────────────
+
+  async function buildMiniAppPanelText(status) {
+    const env = process.env.MINI_APP_URL ||
+      (process.env.REPLIT_DOMAINS ? `https://${process.env.REPLIT_DOMAINS.split(',')[0].trim()}/` : null) ||
+      (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}/` : null) ||
+      '_(not set)_';
+    const activeUrl = status.miniAppButtonUrl || env;
+    const statusIcon = status.miniAppButtonEnabled !== false ? '🟢 Enabled' : '🔴 Disabled';
+    return (
+      `🛍️ *Mini App Reply-Keyboard Button*\n\`━━━━━━━━━━━━━━━━━━━━━━\`\n\n` +
+      `Status: *${statusIcon}*\n` +
+      `Button text: \`${status.miniAppButtonText || '🛍️ Mental Gaming Store'}\`\n` +
+      `Active URL: \`${activeUrl}\`\n` +
+      `DB URL override: \`${status.miniAppButtonUrl || '_(uses env var)_'}\`\n\n` +
+      `_The button appears above the message input when users press /start._\n\n` +
+      `Commands:\n` +
+      `• /setminiapptext <text> — change button label\n` +
+      `• /setminiappurl <url> — override URL\n` +
+      `• /clearminiappurl — revert to env var`
+    );
+  }
+
+  bot.action('miniapp_panel', adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    const status = await SystemStatus.get();
+    const text = await buildMiniAppPanelText(status);
+    const toggleLabel = status.miniAppButtonEnabled !== false ? '🔴 Disable Button' : '🟢 Enable Button';
+    await ctx.reply(text, {
+      parse_mode: 'Markdown',
+      ...Markup.inlineKeyboard([
+        [Markup.button.callback(toggleLabel, 'miniapp_toggle')],
+        [Markup.button.callback('🔙 Dashboard', 'dashboard_refresh')],
+      ]),
+    });
+  });
+
+  bot.action('miniapp_toggle', adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    const status = await SystemStatus.get();
+    const newVal = !(status.miniAppButtonEnabled !== false);
+    await SystemStatus.set({ miniAppButtonEnabled: newVal }, ctx.from.id);
+    const updated = await SystemStatus.get();
+    const text = await buildMiniAppPanelText(updated);
+    const toggleLabel = updated.miniAppButtonEnabled !== false ? '🔴 Disable Button' : '🟢 Enable Button';
+    await ctx.editMessageText(text, {
+      parse_mode: 'Markdown',
+      ...Markup.inlineKeyboard([
+        [Markup.button.callback(toggleLabel, 'miniapp_toggle')],
+        [Markup.button.callback('🔙 Dashboard', 'dashboard_refresh')],
+      ]),
+    });
+  });
+
+  bot.command('setminiapptext', adminOnly(), async (ctx) => {
+    const text = ctx.message.text.split(' ').slice(1).join(' ').trim();
+    if (!text) return ctx.reply('Usage: /setminiapptext <button label>\nExample: /setminiapptext 🛍️ Open Store');
+    await SystemStatus.set({ miniAppButtonText: text }, ctx.from.id);
+    return ctx.reply(`✅ Mini App button text set to:\n\`${text}\`\n\n_Press /start to see the updated keyboard._`, { parse_mode: 'Markdown' });
+  });
+
+  bot.command('setminiappurl', adminOnly(), async (ctx) => {
+    const url = ctx.message.text.split(' ')[1]?.trim();
+    if (!url || !url.startsWith('https://')) return ctx.reply('Usage: /setminiappurl <https://...>\nMust be an HTTPS URL.');
+    await SystemStatus.set({ miniAppButtonUrl: url }, ctx.from.id);
+    return ctx.reply(`✅ Mini App button URL set to:\n\`${url}\`\n\n_Press /start to see the updated keyboard._`, { parse_mode: 'Markdown' });
+  });
+
+  bot.command('clearminiappurl', adminOnly(), async (ctx) => {
+    await SystemStatus.set({ miniAppButtonUrl: null }, ctx.from.id);
+    return ctx.reply('✅ Mini App URL override cleared — bot will use env var (MINI_APP_URL / REPLIT_DEV_DOMAIN).', { parse_mode: 'Markdown' });
   });
 };

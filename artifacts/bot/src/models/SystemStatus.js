@@ -124,6 +124,23 @@ const systemStatusSchema = new mongoose.Schema(
       comment: 'Escalating commission rates based on number of successful referrals',
     },
 
+    // ── Mini App Reply-Keyboard Button ────────────────────────────────────────
+    miniAppButtonEnabled: {
+      type:    Boolean,
+      default: true,
+      comment: 'Show a persistent Reply-Keyboard WebApp button at the top of the main menu',
+    },
+    miniAppButtonText: {
+      type:    String,
+      default: '🛍️ Mental Gaming Store',
+      comment: 'Label shown on the Reply-Keyboard WebApp button',
+    },
+    miniAppButtonUrl: {
+      type:    String,
+      default: null,
+      comment: 'Override URL for the WebApp button; null = use MINI_APP_URL env var',
+    },
+
     // ── Webhook Security ───────────────────────────────────────────────────────
     webhookSecret: {
       type:    String,
