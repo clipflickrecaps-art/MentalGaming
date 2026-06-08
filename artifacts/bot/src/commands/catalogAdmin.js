@@ -22,16 +22,6 @@ const { price } = require('../utils/ui');
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-function catalogKeyboard(catalogId) {
-  return Markup.inlineKeyboard([
-    [Markup.button.callback('➕ Add Field',      `cat_field_add:${catalogId}`)],
-    [Markup.button.callback(
-      '🔀 Toggle Active',    `cat_toggle:${catalogId}`),
-      Markup.button.callback('🗑 Delete',         `cat_del:${catalogId}`)],
-    [Markup.button.callback('🔙 All Catalogs',   'admin_catalogs_action')],
-  ]);
-}
-
 async function sendCatalogView(ctx, catalog) {
   const fieldLines = catalog.checkoutFields.length
     ? catalog.checkoutFields
@@ -44,11 +34,18 @@ async function sendCatalogView(ctx, catalog) {
     : '_No checkout fields — will not prompt user for delivery info_';
 
   const productCount = await Product.countDocuments({ catalogId: catalog._id });
+  let parentName = null;
+  if (catalog.parentCategory) {
+    const parent = await Catalog.findById(catalog.parentCategory).select('name').lean();
+    parentName = parent?.name ?? null;
+  }
 
   const text =
     `📂 *${catalog.name}*\n\n` +
     `Status: ${catalog.isActive ? '✅ Active' : '🔴 Inactive'}\n` +
     `Products: *${productCount}*\n` +
+    (parentName ? `Parent: *${parentName}*\n` : '') +
+    (catalog.imageUrl ? `🖼 Image: ${catalog.imageUrl}\n` : '') +
     (catalog.description ? `📝 ${catalog.description}\n` : '') +
     `\n*Checkout Fields:*\n${fieldLines}`;
 
@@ -61,6 +58,10 @@ async function sendCatalogView(ctx, catalog) {
     ...Markup.inlineKeyboard([
       [Markup.button.callback('➕ Add Field', `cat_field_add:${catalog._id}`)],
       ...fieldDelButtons,
+      [
+        Markup.button.callback('🖼 Set Image', `cat_setimage:${catalog._id}`),
+        Markup.button.callback('🔗 Set Parent', `cat_setparent:${catalog._id}`),
+      ],
       [
         Markup.button.callback('🔀 Toggle Active', `cat_toggle:${catalog._id}`),
         Markup.button.callback('🗑 Delete', `cat_del:${catalog._id}`),
@@ -266,6 +267,46 @@ module.exports = (bot) => {
     await ctx.reply(`🗑 Catalog *${catalog.name}* deleted.`, { parse_mode: 'Markdown' });
   });
 
+  // ── Set image URL ─────────────────────────────────────────────────────────
+  bot.action(/^cat_setimage:(.+)$/, adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    ctx.session.catalogAction = 'set_image_url';
+    ctx.session.catalogId = ctx.match[1];
+    await ctx.reply(
+      `🖼 *Set Catalog Image*\n\nPaste an image URL (JPG/PNG/WebP) for this catalog, or send \`-\` to clear the image:\n\n_Send /cancel to abort._`,
+      { parse_mode: 'Markdown' }
+    );
+  });
+
+  // ── Set parent category ────────────────────────────────────────────────────
+  bot.action(/^cat_setparent:(.+)$/, adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    const catalogId = ctx.match[1];
+    const allCatalogs = await Catalog.find({ _id: { $ne: catalogId }, isActive: true }).sort({ name: 1 });
+    const buttons = allCatalogs.map((c) => [
+      Markup.button.callback(c.name, `cat_parent_pick:${catalogId}:${c._id}`),
+    ]);
+    buttons.push([Markup.button.callback('🚫 Remove Parent (make root)', `cat_parent_pick:${catalogId}:none`)]);
+    buttons.push([Markup.button.callback('❌ Cancel', `cat_view:${catalogId}`)]);
+    await ctx.reply(
+      `🔗 *Set Parent Category*\n\nSelect which catalog this should be a sub-catalog of:`,
+      { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) }
+    );
+  });
+
+  bot.action(/^cat_parent_pick:([^:]+):(.+)$/, adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    const [, catalogId, parentId] = ctx.match;
+    const catalog = await Catalog.findById(catalogId);
+    if (!catalog) return ctx.reply('❌ Catalog not found.');
+    catalog.parentCategory = parentId === 'none' ? null : parentId;
+    await catalog.save();
+    await auditLog(ctx.from.id, 'CATALOG_SET_PARENT', catalogId, 'Catalog', { parentId });
+    const msg = parentId === 'none' ? '✅ Parent removed — now a root category.' : '✅ Parent category set.';
+    await ctx.reply(msg);
+    await sendCatalogView(ctx, catalog);
+  });
+
   // ── Remove checkout field ─────────────────────────────────────────────────
   bot.action(/^cat_field_del:([^:]+):(.+)$/, adminOnly(), async (ctx) => {
     await ctx.answerCbQuery();
@@ -454,6 +495,20 @@ module.exports = (bot) => {
       ctx.session.bulkCatalogId = null;
       ctx.session.bulkProductsDraft = null;
       return ctx.reply('❌ Cancelled.');
+    }
+
+    // ── Set image URL ─────────────────────────────────────────────────────
+    if (action === 'set_image_url') {
+      if (!text) return ctx.reply('Please paste an image URL or send `-` to clear:');
+      const catalog = await Catalog.findById(ctx.session.catalogId);
+      if (!catalog) return ctx.reply('❌ Catalog not found.');
+      catalog.imageUrl = text === '-' ? null : text;
+      await catalog.save();
+      await auditLog(ctx.from.id, 'CATALOG_SET_IMAGE', catalog._id.toString(), 'Catalog', { imageUrl: catalog.imageUrl });
+      ctx.session.catalogAction = null;
+      await ctx.reply(text === '-' ? '✅ Image cleared.' : '✅ Image URL saved.');
+      await sendCatalogView(ctx, catalog);
+      return;
     }
 
     // ── Add catalog name ──────────────────────────────────────────────────

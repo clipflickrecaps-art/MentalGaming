@@ -59,7 +59,7 @@ function needsZone(gameName = '') {
 }
 
 // ── Resolve the checkout fields for a product ─────────────────────────────────
-// Returns array of field defs from: product override > catalog > legacy fallback
+// Returns array of field defs from: product override > catalog > parent catalog > legacy fallback
 async function resolveCheckoutFields(product) {
   // Product has explicit override (empty array means "no fields")
   if (Array.isArray(product.checkoutFieldsOverride) && product.checkoutFieldsOverride !== null) {
@@ -67,13 +67,22 @@ async function resolveCheckoutFields(product) {
       .slice()
       .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
   }
-  // Pull from catalog
+  // Pull from catalog (or parent catalog if sub-catalog has no fields)
   if (product.catalogId) {
     const catalog = await Catalog.findById(product.catalogId).lean();
     if (catalog?.checkoutFields?.length) {
       return catalog.checkoutFields
         .slice()
         .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+    }
+    // Sub-catalog with no fields → inherit from parent catalog
+    if (catalog?.parentCategory) {
+      const parent = await Catalog.findById(catalog.parentCategory).lean();
+      if (parent?.checkoutFields?.length) {
+        return parent.checkoutFields
+          .slice()
+          .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+      }
     }
   }
   // Legacy fallback: DirectTopup products always need a Game ID

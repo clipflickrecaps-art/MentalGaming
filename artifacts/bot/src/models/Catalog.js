@@ -18,6 +18,7 @@ const catalogSchema = new mongoose.Schema(
     name:          { type: String, required: true, trim: true, unique: true },
     description:   { type: String, default: '' },
     imageUrl:      { type: String, default: null },
+    parentCategory: { type: mongoose.Schema.Types.ObjectId, ref: 'Catalog', default: null },
     sortOrder:     { type: Number, default: 0 },
     isActive:      { type: Boolean, default: true },
     checkoutFields: { type: [checkoutFieldSchema], default: [] },

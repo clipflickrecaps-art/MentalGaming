@@ -91,8 +91,19 @@ export interface Catalog {
   name: string;
   imageUrl: string | null;
   sortOrder: number;
+  parentCategoryId: string | null;
   checkoutFields: CheckoutField[];
   productCount: number;
+  subCatalogs?: Catalog[];
+}
+
+export interface CatalogDetail {
+  id: string;
+  name: string;
+  imageUrl: string | null;
+  checkoutFields: CheckoutField[];
+  subCatalogs: Catalog[];
+  products: Product[];
 }
 
 export interface Product {

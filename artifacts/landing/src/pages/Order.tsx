@@ -1,23 +1,18 @@
 import { useState, useEffect } from "react";
 import { useLocation, useRoute, Link } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Coins, Wallet as WalletIcon, Check, Plus, Minus } from "lucide-react";
+import { Wallet as WalletIcon, Check, Plus, Minus } from "lucide-react";
 import { Layout } from "@/components/Layout";
 import { Glass } from "@/components/Glass";
 import { Skeleton } from "@/components/EmptyState";
 import { api, ApiError, type Product, type Me, type CheckoutField } from "@/lib/api";
-import { ks, coin, cn } from "@/lib/format";
+import { ks, cn } from "@/lib/format";
 import { haptic } from "@/lib/telegram";
 
-type PayMethod = "wallet" | "coin";
-
-// Resolve checkout fields for a product — uses product.checkoutFields override if set,
-// otherwise falls back to legacy game_id/zone_id for DirectTopup
 function resolveFields(product: Product): CheckoutField[] {
   if (product.checkoutFields !== null) {
     return product.checkoutFields;
   }
-  // Legacy: DirectTopup always asks for Game ID
   if (product.productType === "DirectTopup") {
     return [
       { key: "game_id", label: "Game ID", fieldType: "text", required: true, placeholder: "Your in-game ID" },
@@ -41,16 +36,19 @@ export default function OrderPage() {
 
   const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
   const [quantity, setQuantity] = useState(1);
-  const [pay, setPay] = useState<PayMethod>("wallet");
   const [err, setErr] = useState<string | null>(null);
 
-  // Reset fields when product loads
+  // Respect product maxQuantity
+  const maxQty = (pQ.data as Product & { maxQuantity?: number | null })?.maxQuantity ?? 10;
+  const effectiveMax = maxQty === 1 ? 1 : maxQty === 0 || maxQty == null ? 99 : maxQty;
+
   useEffect(() => {
     if (pQ.data) {
       const fields = resolveFields(pQ.data);
       const init: Record<string, string> = {};
       fields.forEach((f) => { init[f.key] = ""; });
       setFieldValues(init);
+      setQuantity(1);
     }
   }, [pQ.data?.id]);
 
@@ -66,7 +64,7 @@ export default function OrderPage() {
         productId: id,
         checkoutData,
         quantity,
-        paymentMethod: pay,
+        paymentMethod: "wallet",
       });
     },
     onSuccess: (data) => {
@@ -95,9 +93,7 @@ export default function OrderPage() {
   const tierOff = Math.round((unitPrice * tierPct) / 100);
   const unitTotal = Math.max(0, unitPrice - tierOff);
   const total = unitTotal * quantity;
-
-  const balance = pay === "coin" ? meQ.data.balanceCoin : meQ.data.balanceKS;
-  const enough = balance >= total;
+  const enough = meQ.data.balanceKS >= total;
 
   const fieldsOk = fields.every((f) =>
     !f.required || (fieldValues[f.key] ?? "").trim().length > 0
@@ -121,31 +117,35 @@ export default function OrderPage() {
         </Glass>
 
         {/* Quantity picker */}
-        <Glass className="p-4">
-          <div className="text-xs font-medium text-muted-foreground mb-3">Quantity</div>
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => { haptic("selection"); setQuantity((q) => Math.max(1, q - 1)); }}
-              disabled={quantity <= 1}
-              className="pressable h-9 w-9 rounded-full glass border border-white/10 flex items-center justify-center disabled:opacity-30"
-            >
-              <Minus className="h-4 w-4" />
-            </button>
-            <span className="text-xl font-bold w-8 text-center">{quantity}</span>
-            <button
-              onClick={() => { haptic("selection"); setQuantity((q) => Math.min(10, q + 1)); }}
-              disabled={quantity >= 10}
-              className="pressable h-9 w-9 rounded-full glass border border-white/10 flex items-center justify-center disabled:opacity-30"
-            >
-              <Plus className="h-4 w-4" />
-            </button>
-            {quantity > 1 && (
-              <span className="text-xs text-muted-foreground ml-2">
-                {ks(unitPrice)} × {quantity}
-              </span>
-            )}
-          </div>
-        </Glass>
+        {effectiveMax !== 1 && (
+          <Glass className="p-4">
+            <div className="text-xs font-medium text-muted-foreground mb-3">
+              Quantity{effectiveMax < 99 ? ` (max ${effectiveMax})` : ""}
+            </div>
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => { haptic("selection"); setQuantity((q) => Math.max(1, q - 1)); }}
+                disabled={quantity <= 1}
+                className="pressable h-9 w-9 rounded-full glass border border-white/10 flex items-center justify-center disabled:opacity-30"
+              >
+                <Minus className="h-4 w-4" />
+              </button>
+              <span className="text-xl font-bold w-8 text-center">{quantity}</span>
+              <button
+                onClick={() => { haptic("selection"); setQuantity((q) => Math.min(effectiveMax, q + 1)); }}
+                disabled={quantity >= effectiveMax}
+                className="pressable h-9 w-9 rounded-full glass border border-white/10 flex items-center justify-center disabled:opacity-30"
+              >
+                <Plus className="h-4 w-4" />
+              </button>
+              {quantity > 1 && (
+                <span className="text-xs text-muted-foreground ml-2">
+                  {ks(unitPrice)} × {quantity}
+                </span>
+              )}
+            </div>
+          </Glass>
+        )}
 
         {/* Dynamic checkout fields */}
         {fields.length > 0 && (
@@ -182,34 +182,26 @@ export default function OrderPage() {
           </Glass>
         )}
 
-        {/* Payment method */}
-        <div>
-          <div className="text-xs font-medium text-muted-foreground mb-2 px-1">Payment</div>
-          <div className="grid grid-cols-2 gap-3">
-            <PaymentOption
-              icon={<WalletIcon className="h-5 w-5" />}
-              label="Wallet"
-              value={ks(meQ.data.balanceKS)}
-              active={pay === "wallet"}
-              onClick={() => { haptic("selection"); setPay("wallet"); }}
-              testId="pay-wallet"
-            />
-            <PaymentOption
-              icon={<Coins className="h-5 w-5" />}
-              label="Mental Coins"
-              value={coin(meQ.data.balanceCoin)}
-              active={pay === "coin"}
-              onClick={() => { haptic("selection"); setPay("coin"); }}
-              testId="pay-coin"
-            />
+        {/* Payment — wallet only */}
+        <Glass className="p-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="h-9 w-9 rounded-full bg-primary/20 flex items-center justify-center">
+              <WalletIcon className="h-4 w-4 text-primary" />
+            </div>
+            <div>
+              <div className="text-sm font-medium">Wallet</div>
+              <div className="text-xs text-muted-foreground">{ks(meQ.data.balanceKS)}</div>
+            </div>
           </div>
           {!enough && (
-            <div className="mt-2 text-xs text-rose-300 flex items-center justify-between">
-              <span>Not enough balance.</span>
-              <Link href="/topup" className="text-primary font-medium">Top up →</Link>
-            </div>
+            <Link href="/topup" className="text-xs text-primary font-medium">Top up →</Link>
           )}
-        </div>
+        </Glass>
+        {!enough && (
+          <div className="text-xs text-rose-300 px-1">
+            Not enough balance. Need {ks(total - meQ.data.balanceKS)} more.
+          </div>
+        )}
 
         {/* Price summary */}
         <Glass className="p-4 space-y-1.5 text-sm">
@@ -227,7 +219,7 @@ export default function OrderPage() {
             </Row>
           )}
           <div className="border-t border-white/10 my-2" />
-          <Row label="Total" bold>{pay === "coin" ? coin(total) : ks(total)}</Row>
+          <Row label="Total" bold>{ks(total)}</Row>
         </Glass>
 
         {err && (
@@ -244,7 +236,7 @@ export default function OrderPage() {
           >
             {mutation.isPending
               ? "Placing order…"
-              : <><Check className="h-5 w-5" /> Confirm & Pay {pay === "coin" ? coin(total) : ks(total)}</>}
+              : <><Check className="h-5 w-5" /> Confirm & Pay {ks(total)}</>}
           </button>
         </div>
       </div>
@@ -258,26 +250,5 @@ function Row({ label, children, bold, className }: { label: string; children: Re
       <span className={bold ? "" : "text-muted-foreground"}>{label}</span>
       <span>{children}</span>
     </div>
-  );
-}
-
-function PaymentOption({ icon, label, value, active, onClick, testId }: {
-  icon: React.ReactNode; label: string; value: string; active: boolean; onClick: () => void; testId: string;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      data-testid={testId}
-      className={cn(
-        "pressable text-left rounded-2xl p-3.5 border transition-colors",
-        active ? "glass-blue border-primary/50" : "glass border-white/10"
-      )}
-    >
-      <div className="flex items-center gap-2">
-        {icon}
-        <span className="text-sm font-medium">{label}</span>
-      </div>
-      <div className="text-xs text-muted-foreground mt-1.5">{value}</div>
-    </button>
   );
 }

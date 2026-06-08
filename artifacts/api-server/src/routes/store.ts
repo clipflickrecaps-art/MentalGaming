@@ -48,6 +48,7 @@ interface CatalogDoc {
   imageUrl: string | null;
   sortOrder: number;
   isActive: boolean;
+  parentCategoryId?: ObjectId | null;
   checkoutFields: CheckoutFieldDef[];
 }
 
@@ -224,14 +225,32 @@ router.get("/catalogs", async (req: Request, res: Response) => {
     : [];
   const countMap = new Map(counts.map((c) => [c._id.toString(), c.count]));
 
+  // Build sub-catalog map (parentId → children)
+  const subMap = new Map<string, typeof docs>();
+  for (const c of docs) {
+    if (c.parentCategoryId) {
+      const pid = c.parentCategoryId.toString();
+      if (!subMap.has(pid)) subMap.set(pid, []);
+      subMap.get(pid)!.push(c);
+    }
+  }
+
+  const toItem = (c: (typeof docs)[0]) => ({
+    id: c._id.toString(),
+    name: c.name,
+    imageUrl: c.imageUrl ?? null,
+    sortOrder: c.sortOrder,
+    parentCategoryId: c.parentCategoryId?.toString() ?? null,
+    checkoutFields: c.checkoutFields,
+    productCount: countMap.get(c._id.toString()) ?? 0,
+  });
+
+  // Only root catalogs (no parent) at top level; include sub-catalog counts
+  const rootDocs = docs.filter((c) => !c.parentCategoryId);
   res.json({
-    catalogs: docs.map((c) => ({
-      id: c._id.toString(),
-      name: c.name,
-      imageUrl: c.imageUrl,
-      sortOrder: c.sortOrder,
-      checkoutFields: c.checkoutFields,
-      productCount: countMap.get(c._id.toString()) ?? 0,
+    catalogs: rootDocs.map((c) => ({
+      ...toItem(c),
+      subCatalogs: (subMap.get(c._id.toString()) ?? []).map(toItem),
     })),
   });
 });
@@ -246,17 +265,40 @@ router.get("/catalogs/:id", async (req: Request, res: Response) => {
   const cat = await catalogs.findOne({ _id: id, isActive: true });
   if (!cat) { res.status(404).json({ error: "Catalog not found" }); return; }
 
+  // Sub-catalogs of this catalog
+  const subDocs = await catalogs
+    .find({ parentCategoryId: id, isActive: true })
+    .sort({ sortOrder: 1, name: 1 })
+    .toArray();
+
   const products = await getCollection<ProductDoc>("products");
   const productDocs = await products
     .find({ catalogId: id, isActive: true })
     .sort({ sortOrder: 1, name: 1 })
     .toArray();
 
+  // Resolve effective checkout fields: own → parent
+  let effectiveFields = cat.checkoutFields;
+  if (!effectiveFields.length && cat.parentCategoryId) {
+    const parent = await catalogs.findOne({ _id: cat.parentCategoryId });
+    if (parent?.checkoutFields?.length) effectiveFields = parent.checkoutFields;
+  }
+
   res.json({
     id: cat._id.toString(),
     name: cat.name,
-    imageUrl: cat.imageUrl,
-    checkoutFields: cat.checkoutFields,
+    imageUrl: cat.imageUrl ?? null,
+    parentCategoryId: cat.parentCategoryId?.toString() ?? null,
+    checkoutFields: effectiveFields,
+    subCatalogs: subDocs.map((s) => ({
+      id: s._id.toString(),
+      name: s.name,
+      imageUrl: s.imageUrl ?? null,
+      sortOrder: s.sortOrder,
+      parentCategoryId: id.toString(),
+      checkoutFields: s.checkoutFields,
+      productCount: 0,
+    })),
     products: productDocs.map(publicProduct),
   });
 });
@@ -300,7 +342,23 @@ router.get("/products/:id", async (req: Request, res: Response) => {
   const products = await getCollection<ProductDoc>("products");
   const p = await products.findOne({ _id: id, isActive: true });
   if (!p) return res.status(404).json({ error: "Product not found" });
-  return res.json(publicProduct(p));
+
+  // Resolve checkout fields: product override → catalog → parent catalog → null
+  let resolvedFields: CheckoutFieldDef[] | null = null;
+  if (p.checkoutFieldsOverride != null && Array.isArray(p.checkoutFieldsOverride)) {
+    resolvedFields = p.checkoutFieldsOverride;
+  } else if (p.catalogId) {
+    const catalogs = await getCollection<CatalogDoc>("catalogs");
+    const cat = await catalogs.findOne({ _id: p.catalogId });
+    if (cat?.checkoutFields?.length) {
+      resolvedFields = cat.checkoutFields;
+    } else if (cat?.parentCategoryId) {
+      const parent = await catalogs.findOne({ _id: cat.parentCategoryId });
+      if (parent?.checkoutFields?.length) resolvedFields = parent.checkoutFields;
+    }
+  }
+
+  return res.json({ ...publicProduct(p), checkoutFields: resolvedFields });
 });
 
 // ── GET /flashsale ─────────────────────────────────────────────────────────
@@ -349,13 +407,24 @@ router.post("/orders", async (req: Request, res: Response) => {
     return res.status(409).json({ error: "Out of stock" });
   }
 
+  // Block Mental Coins payment — wallet only
+  if (body.paymentMethod === "coin") {
+    return res.status(400).json({ error: "Mental Coins cannot be used for purchases" });
+  }
+
   // ── Resolve checkout fields and validate required fields ──────────────────
   let checkoutFields: CheckoutFieldDef[] = [];
   if (product.checkoutFieldsOverride != null && Array.isArray(product.checkoutFieldsOverride)) {
     checkoutFields = product.checkoutFieldsOverride;
   } else if (product.catalogId) {
     const cat = await catalogs.findOne({ _id: product.catalogId });
-    checkoutFields = cat?.checkoutFields ?? [];
+    if (cat?.checkoutFields?.length) {
+      checkoutFields = cat.checkoutFields;
+    } else if (cat?.parentCategoryId) {
+      // Inherit from parent catalog if sub-catalog has no fields set
+      const parent = await catalogs.findOne({ _id: cat.parentCategoryId });
+      checkoutFields = parent?.checkoutFields ?? [];
+    }
   } else if (product.productType === "DirectTopup") {
     // Legacy: require gameId
     if (!body.gameId?.trim()) {
@@ -402,18 +471,13 @@ router.post("/orders", async (req: Request, res: Response) => {
   const unitFinalAmount = Math.max(0, baseAmount - tierDiscount);
   const totalFinalAmount = unitFinalAmount * quantity;
 
-  const method = body.paymentMethod === "coin" ? "coin" : "wallet";
-  const wallet: "KS" | "Coin" = method === "coin" ? "Coin" : "KS";
-  const balanceField = method === "coin" ? "balanceCoin" : "balanceKS";
-  const currentBalance =
-    method === "coin" ? u.balanceCoin : u.balanceKS;
+  const wallet: "KS" = "KS";
+  const balanceField = "balanceKS";
+  const currentBalance = u.balanceKS;
 
   if (currentBalance < totalFinalAmount) {
     return res.status(402).json({
-      error:
-        method === "coin"
-          ? "Not enough Mental Coins"
-          : "Not enough wallet balance",
+      error: "Not enough wallet balance",
       needed: totalFinalAmount,
       balance: currentBalance,
     });
@@ -434,8 +498,7 @@ router.post("/orders", async (req: Request, res: Response) => {
   if (!debited) {
     return res.status(402).json({ error: "Balance changed, please retry" });
   }
-  const balanceAfter =
-    method === "coin" ? debited.balanceCoin : debited.balanceKS;
+  const balanceAfter = debited.balanceKS;
   const balanceBefore = balanceAfter + totalFinalAmount;
 
   // Legacy gameId/zoneId: extract from checkoutData for backward-compat fields
