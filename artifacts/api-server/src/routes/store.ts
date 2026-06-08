@@ -48,7 +48,7 @@ interface CatalogDoc {
   imageUrl: string | null;
   sortOrder: number;
   isActive: boolean;
-  parentCategoryId?: ObjectId | null;
+  parentCategory?: ObjectId | null;  // MongoDB field name (bot uses this)
   checkoutFields: CheckoutFieldDef[];
 }
 
@@ -229,8 +229,8 @@ router.get("/catalogs", async (req: Request, res: Response) => {
   // Build sub-catalog map (parentId → children)
   const subMap = new Map<string, typeof docs>();
   for (const c of docs) {
-    if (c.parentCategoryId) {
-      const pid = c.parentCategoryId.toString();
+    if (c.parentCategory) {
+      const pid = c.parentCategory.toString();
       if (!subMap.has(pid)) subMap.set(pid, []);
       subMap.get(pid)!.push(c);
     }
@@ -241,13 +241,13 @@ router.get("/catalogs", async (req: Request, res: Response) => {
     name: c.name,
     imageUrl: c.imageUrl ?? null,
     sortOrder: c.sortOrder,
-    parentCategoryId: c.parentCategoryId?.toString() ?? null,
+    parentCategoryId: c.parentCategory?.toString() ?? null,
     checkoutFields: c.checkoutFields,
     productCount: countMap.get(c._id.toString()) ?? 0,
   });
 
   // Only root catalogs (no parent) at top level; include sub-catalog counts
-  const rootDocs = docs.filter((c) => !c.parentCategoryId);
+  const rootDocs = docs.filter((c) => !c.parentCategory);
   res.json({
     catalogs: rootDocs.map((c) => ({
       ...toItem(c),
@@ -268,7 +268,7 @@ router.get("/catalogs/:id", async (req: Request, res: Response) => {
 
   // Sub-catalogs of this catalog
   const subDocs = await catalogs
-    .find({ parentCategoryId: id, isActive: true })
+    .find({ parentCategory: id, isActive: true })
     .sort({ sortOrder: 1, name: 1 })
     .toArray();
 
@@ -296,7 +296,7 @@ router.get("/catalogs/:id", async (req: Request, res: Response) => {
     id: cat._id.toString(),
     name: cat.name,
     imageUrl: cat.imageUrl ?? null,
-    parentCategoryId: cat.parentCategoryId?.toString() ?? null,
+    parentCategoryId: cat.parentCategory?.toString() ?? null,
     checkoutFields: effectiveFields,
     subCatalogs: subDocs.map((s) => ({
       id: s._id.toString(),
@@ -360,8 +360,8 @@ router.get("/products/:id", async (req: Request, res: Response) => {
     const cat = await catalogs.findOne({ _id: p.catalogId });
     if (cat?.checkoutFields?.length) {
       resolvedFields = cat.checkoutFields;
-    } else if (cat?.parentCategoryId) {
-      const parent = await catalogs.findOne({ _id: cat.parentCategoryId });
+    } else if (cat?.parentCategory) {
+      const parent = await catalogs.findOne({ _id: cat.parentCategory });
       if (parent?.checkoutFields?.length) resolvedFields = parent.checkoutFields;
     }
   }
@@ -428,9 +428,9 @@ router.post("/orders", async (req: Request, res: Response) => {
     const cat = await catalogs.findOne({ _id: product.catalogId });
     if (cat?.checkoutFields?.length) {
       checkoutFields = cat.checkoutFields;
-    } else if (cat?.parentCategoryId) {
+    } else if (cat?.parentCategory) {
       // Inherit from parent catalog if sub-catalog has no fields set
-      const parent = await catalogs.findOne({ _id: cat.parentCategoryId });
+      const parent = await catalogs.findOne({ _id: cat.parentCategory });
       checkoutFields = parent?.checkoutFields ?? [];
     }
   } else if (product.productType === "DirectTopup") {

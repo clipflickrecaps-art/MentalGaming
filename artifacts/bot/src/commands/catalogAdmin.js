@@ -671,4 +671,46 @@ module.exports = (bot) => {
       { parse_mode: 'Markdown' }
     );
   });
+
+  // ── One-time migration: auto-create parent catalogs + assign sub-catalogs ─────
+  bot.command('migratecatalogs', adminOnly(), async (ctx) => {
+    const GROUPS = [
+      { prefixes: ['ML ', 'MLBB '], parent: 'Mobile Legends' },
+      { prefixes: ['FF ', 'Free Fire'], parent: 'Free Fire' },
+      { prefixes: ['PUBG '], parent: 'PUBG Mobile' },
+      { prefixes: ['Genshin '], parent: 'Genshin Impact' },
+      { prefixes: ['Honkai ', 'HSR '], parent: 'Honkai: Star Rail' },
+      { prefixes: ['Valorant '], parent: 'Valorant' },
+    ];
+
+    const all = await Catalog.find({}).lean();
+    const lines = ['🔄 *Running catalog migration...*\n'];
+
+    for (const group of GROUPS) {
+      const children = all.filter(c =>
+        group.prefixes.some(p => c.name.startsWith(p)) && c.name !== group.parent
+      );
+      if (!children.length) continue;
+
+      let parent = await Catalog.findOne({ name: group.parent });
+      if (!parent) {
+        parent = await Catalog.create({ name: group.parent, isActive: true, checkoutFields: [], sortOrder: 0 });
+        lines.push(`✅ Created: *${group.parent}*`);
+      } else {
+        lines.push(`📂 Found: *${group.parent}*`);
+      }
+
+      for (const child of children) {
+        if (child.parentCategory && child.parentCategory.toString() === parent._id.toString()) {
+          lines.push(`  ⏭ Already: ${child.name}`);
+        } else {
+          await Catalog.updateOne({ _id: child._id }, { $set: { parentCategory: parent._id } });
+          lines.push(`  ✅ ${child.name} → ${group.parent}`);
+        }
+      }
+    }
+
+    lines.push('\n✅ *Migration complete!*');
+    await ctx.reply(lines.join('\n'), { parse_mode: 'Markdown' });
+  });
 };
