@@ -212,18 +212,19 @@ router.get("/catalogs", async (req: Request, res: Response) => {
     .sort({ sortOrder: 1, name: 1 })
     .toArray();
 
-  // Count products per catalog
+  // Count products per catalog — match by catalogId OR by category name (legacy products without catalogId)
   const products = await getCollection<ProductDoc>("products");
-  const ids = docs.map((c) => c._id);
-  const counts = ids.length
-    ? await products
-        .aggregate<{ _id: ObjectId; count: number }>([
-          { $match: { isActive: true, catalogId: { $in: ids } } },
-          { $group: { _id: "$catalogId", count: { $sum: 1 } } },
-        ])
-        .toArray()
-    : [];
-  const countMap = new Map(counts.map((c) => [c._id.toString(), c.count]));
+  const countMap = new Map<string, number>();
+  for (const cat of docs) {
+    const n = await products.countDocuments({
+      isActive: true,
+      $or: [
+        { catalogId: cat._id },
+        { catalogId: { $in: [null, undefined] }, category: cat.name },
+      ],
+    });
+    countMap.set(cat._id.toString(), n);
+  }
 
   // Build sub-catalog map (parentId → children)
   const subMap = new Map<string, typeof docs>();
@@ -272,8 +273,15 @@ router.get("/catalogs/:id", async (req: Request, res: Response) => {
     .toArray();
 
   const products = await getCollection<ProductDoc>("products");
+  // Match by catalogId OR by category name (for legacy products without catalogId)
   const productDocs = await products
-    .find({ catalogId: id, isActive: true })
+    .find({
+      isActive: true,
+      $or: [
+        { catalogId: id },
+        { catalogId: { $in: [null, undefined] }, category: cat.name },
+      ],
+    })
     .sort({ sortOrder: 1, name: 1 })
     .toArray();
 
