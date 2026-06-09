@@ -13,6 +13,12 @@ const userSchema = new mongoose.Schema(
 
     membershipTier: { type: String, enum: ['Silver', 'Gold', 'Platinum'], default: 'Silver' },
 
+    // ── Dual Tier System (based on completed order spending) ─────────────────
+    lifetimeTier:  { type: String, enum: ['Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond'], default: 'Bronze' },
+    activeTier:    { type: String, enum: ['Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond'], default: 'Bronze' },
+    lifetimeSpend: { type: Number, default: 0, min: 0, comment: 'All-time completed order spend (KS)' },
+    yearlySpend:   { type: Number, default: 0, min: 0, comment: 'Last 365 days completed order spend (KS)' },
+
     // ── Spin Wheel ───────────────────────────────────────────────────────────
     lastSpinAt: { type: Date, default: null },
 

@@ -68,6 +68,58 @@ export interface Me {
   language: "en" | "mm";
   photoUrl: string | null;
   tierDiscountPct: number;
+  lifetimeTier: "Bronze" | "Silver" | "Gold" | "Platinum" | "Diamond";
+  activeTier: "Bronze" | "Silver" | "Gold" | "Platinum" | "Diamond";
+  lifetimeSpend: number;
+  yearlySpend: number;
+}
+
+export interface Banner {
+  id: string;
+  title: string;
+  subtitle: string | null;
+  imageUrl: string | null;
+  targetType: "shop" | "category" | "product" | "url" | "none";
+  targetId: string | null;
+  buttonText: string | null;
+  endAt: string | null;
+  priority: number;
+}
+
+export interface Notification {
+  id: string;
+  type: string;
+  title: string;
+  body: string | null;
+  imageUrl: string | null;
+  targetType: string;
+  targetId: string | null;
+  isRead: boolean;
+  at: string | null;
+}
+
+export interface NotificationsResponse {
+  unreadCount: number;
+  notifications: Notification[];
+}
+
+export interface PopularResponse {
+  popular: Product[];
+  recent: Product[];
+}
+
+export interface FeatureGates {
+  totalUsers: number;
+  unlockTarget: number;
+  allUnlocked: boolean;
+  gates: Record<string, boolean>;
+}
+
+export interface McConfig {
+  enabled: boolean;
+  exchangeRate: number;
+  minRedeem: number;
+  maxDiscountPct: number;
 }
 
 export interface CheckoutField {
@@ -122,6 +174,7 @@ export interface Product {
   catalogId: string | null;
   sortOrder: number;
   checkoutFields: CheckoutField[] | null;
+  status: "active" | "out_of_stock" | "coming_soon" | "hidden";
 }
 
 export interface Category { name: string; count: number; }

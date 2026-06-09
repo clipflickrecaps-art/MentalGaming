@@ -163,6 +163,25 @@ async function completeOrder(orderId, adminId, deliveredData, telegram) {
 
   await auditLog(adminId, 'ORDER_COMPLETED', orderId, 'Order', { productType: order.productType });
 
+  // ── Notifications + Tier recalc (non-blocking) ─────────────────────────────
+  setImmediate(async () => {
+    try {
+      const NotificationService = require('./NotificationService');
+      const TierService         = require('./TierService');
+      const telegramId = order.userId?.telegramId;
+      if (telegramId) {
+        await NotificationService.notifyOrderCompleted(telegramId, {
+          orderId:     order._id,
+          productName: order.productId?.name || 'Unknown',
+          amount:      order.amount,
+        });
+      }
+      await TierService.recalcUserTiers(order.userId._id);
+    } catch (e) {
+      console.error('[OrderService] post-complete hooks error:', e.message);
+    }
+  });
+
   return order;
 }
 
@@ -193,6 +212,28 @@ async function cancelAndRefund(orderId, adminId, reason) {
   }
 
   await auditLog(adminId, 'ORDER_CANCELLED_REFUNDED', orderId, 'Order', { reason, refundAmount: order.amount });
+
+  // ── Notifications (non-blocking) ──────────────────────────────────────────
+  setImmediate(async () => {
+    try {
+      const NotificationService = require('./NotificationService');
+      const telegramId = order.userId?.telegramId;
+      if (telegramId) {
+        await NotificationService.notifyOrderCancelled(telegramId, {
+          orderId:     order._id,
+          productName: order.productId?.name || 'Unknown',
+          reason,
+        });
+        await NotificationService.notifyRefundCompleted(telegramId, {
+          orderId:     order._id,
+          productName: order.productId?.name || 'Unknown',
+          amount:      order.amount,
+        });
+      }
+    } catch (e) {
+      console.error('[OrderService] cancel notification error:', e.message);
+    }
+  });
 
   return order;
 }

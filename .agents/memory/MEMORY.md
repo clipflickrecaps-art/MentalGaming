@@ -1,0 +1,4 @@
+- [Feature Implementation Map](feature-map.md) — all 7 phases implemented; key files, models, services, and API endpoints per feature.
+- [Dual Tier Architecture](dual-tier.md) — Lifetime (never decreases) + Active (last 365 days) tier system; TierService recalculates after every completed order via setImmediate hook in OrderService.
+- [Product Status Field](product-status.md) — `status` enum (active/out_of_stock/coming_soon/hidden) added to Product.js; API excludes hidden by default; publicProduct() returns status.
+- [Feature Gate Pattern](feature-gate.md) — SystemStatus controls featureGateEnabled + unlockTargetUsers; GET /api/store/feature-gates evaluates per-feature locks/unlocks vs user count.

@@ -64,11 +64,53 @@ interface ProductDoc {
   flashSaleEnd: Date | null;
   stockCount: number;
   isActive: boolean;
+  status?: "active" | "out_of_stock" | "coming_soon" | "hidden";
   imageUrl: string | null;
   description: string;
   catalogId?: ObjectId | null;
   sortOrder?: number;
   checkoutFieldsOverride?: CheckoutFieldDef[] | null;
+}
+
+interface BannerDoc {
+  _id: ObjectId;
+  title: string;
+  subtitle: string | null;
+  imageUrl: string | null;
+  targetType: "shop" | "category" | "product" | "url" | "none";
+  targetId: string | null;
+  buttonText: string | null;
+  startAt: Date | null;
+  endAt: Date | null;
+  isActive: boolean;
+  priority: number;
+}
+
+interface NotificationDoc {
+  _id: ObjectId;
+  userId: ObjectId;
+  telegramId: number;
+  type: string;
+  title: string;
+  body: string | null;
+  imageUrl: string | null;
+  targetType: string;
+  targetId: string | null;
+  isRead: boolean;
+  readAt: Date | null;
+  createdAt?: Date;
+}
+
+interface SystemStatusDoc {
+  _id: string;
+  featureGateEnabled?: boolean;
+  unlockTargetUsers?: number;
+  manuallyUnlockedFeatures?: string[];
+  manuallyLockedFeatures?: string[];
+  mcRedeemEnabled?: boolean;
+  mcExchangeRate?: number;
+  mcMinRedeem?: number;
+  mcMaxDiscountPct?: number;
 }
 
 interface OrderDoc {
@@ -157,6 +199,7 @@ function tierDiscountPct(tier: StoreUser["membershipTier"]): number {
 function publicProduct(p: ProductDoc) {
   const effective = effectivePrice(p);
   const onSale = effective < p.finalPrice;
+  const status = p.status ?? (p.isActive ? "active" : "hidden");
   return {
     id: p._id.toString(),
     name: p.name,
@@ -173,6 +216,7 @@ function publicProduct(p: ProductDoc) {
     catalogId: p.catalogId?.toString() ?? null,
     sortOrder: p.sortOrder ?? 0,
     checkoutFields: p.checkoutFieldsOverride ?? null,
+    status,
   };
 }
 
@@ -187,7 +231,12 @@ function asUser(req: Request): StoreUser {
 // ── GET /me ────────────────────────────────────────────────────────────────
 
 router.get("/me", (req: Request, res: Response) => {
-  const u = asUser(req);
+  const u = asUser(req) as StoreUser & {
+    lifetimeTier?: string;
+    activeTier?: string;
+    lifetimeSpend?: number;
+    yearlySpend?: number;
+  };
   res.json({
     id: u._id.toString(),
     telegramId: u.telegramId,
@@ -200,6 +249,10 @@ router.get("/me", (req: Request, res: Response) => {
     language: u.language,
     photoUrl: req.tgUser?.photo_url || null,
     tierDiscountPct: tierDiscountPct(u.membershipTier),
+    lifetimeTier:  u.lifetimeTier  ?? "Bronze",
+    activeTier:    u.activeTier    ?? "Bronze",
+    lifetimeSpend: u.lifetimeSpend ?? 0,
+    yearlySpend:   u.yearlySpend   ?? 0,
   });
 });
 
@@ -315,7 +368,10 @@ router.get("/catalogs/:id", async (req: Request, res: Response) => {
 
 router.get("/products", async (req: Request, res: Response) => {
   const products = await getCollection<ProductDoc>("products");
-  const filter: Filter<ProductDoc> = { isActive: true };
+  const filter: Filter<ProductDoc> = {
+    isActive: true,
+    status: { $nin: ["hidden"] } as Filter<ProductDoc>["status"],
+  };
   const cat = req.query["category"];
   if (typeof cat === "string" && cat) filter.category = cat;
   const search = req.query["search"];
@@ -858,6 +914,243 @@ router.get("/payment-methods", async (_req: Request, res: Response) => {
       accountNumber: m.accountNumber,
     })),
   });
+});
+
+// ── GET /banners ───────────────────────────────────────────────────────────
+
+router.get("/banners", async (_req: Request, res: Response) => {
+  const banners = await getCollection<BannerDoc>("banners");
+  const now = new Date();
+  const docs = await banners
+    .find({
+      isActive: true,
+      $or: [{ startAt: null }, { startAt: { $lte: now } }],
+    })
+    .sort({ priority: -1, createdAt: -1 })
+    .limit(10)
+    .toArray();
+
+  const activeDocs = docs.filter(
+    (b) => !b.endAt || new Date(b.endAt) >= now
+  );
+
+  res.json({
+    banners: activeDocs.map((b) => ({
+      id: b._id.toString(),
+      title: b.title,
+      subtitle: b.subtitle,
+      imageUrl: b.imageUrl,
+      targetType: b.targetType,
+      targetId: b.targetId,
+      buttonText: b.buttonText,
+      endAt: b.endAt,
+      priority: b.priority,
+    })),
+  });
+});
+
+// ── GET /notifications ─────────────────────────────────────────────────────
+
+router.get("/notifications", async (req: Request, res: Response) => {
+  const u = asUser(req);
+  const notifs = await getCollection<NotificationDoc>("notifications");
+  const docs = await notifs
+    .find({ telegramId: u.telegramId })
+    .sort({ createdAt: -1 })
+    .limit(50)
+    .toArray();
+
+  const unreadCount = docs.filter((n) => !n.isRead).length;
+
+  res.json({
+    unreadCount,
+    notifications: docs.map((n) => ({
+      id: n._id.toString(),
+      type: n.type,
+      title: n.title,
+      body: n.body,
+      imageUrl: n.imageUrl,
+      targetType: n.targetType,
+      targetId: n.targetId,
+      isRead: n.isRead,
+      at: n.createdAt ?? null,
+    })),
+  });
+});
+
+// ── PATCH /notifications/:id/read ──────────────────────────────────────────
+
+router.patch("/notifications/:id/read", async (req: Request, res: Response) => {
+  const u = asUser(req);
+  const id = safeId(String(req.params["id"] ?? ""));
+  if (!id) { res.status(400).json({ error: "Bad id" }); return; }
+
+  const notifs = await getCollection<NotificationDoc>("notifications");
+  await notifs.updateOne(
+    { _id: id, telegramId: u.telegramId },
+    { $set: { isRead: true, readAt: new Date() } }
+  );
+  res.json({ ok: true });
+});
+
+// ── PATCH /notifications/read-all ─────────────────────────────────────────
+
+router.patch("/notifications/read-all", async (req: Request, res: Response) => {
+  const u = asUser(req);
+  const notifs = await getCollection<NotificationDoc>("notifications");
+  await notifs.updateMany(
+    { telegramId: u.telegramId, isRead: false },
+    { $set: { isRead: true, readAt: new Date() } }
+  );
+  res.json({ ok: true });
+});
+
+// ── GET /popular ───────────────────────────────────────────────────────────
+
+router.get("/popular", async (_req: Request, res: Response) => {
+  const orders = await getCollection("orders");
+  const products = await getCollection<ProductDoc>("products");
+
+  // Trending: most completed orders in last 30 days
+  const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const topProductIds = await orders
+    .aggregate<{ _id: ObjectId; count: number }>([
+      { $match: { status: "Success", timestamp: { $gte: since } } },
+      { $group: { _id: "$productId", count: { $sum: 1 } } },
+      { $sort: { count: -1 } },
+      { $limit: 10 },
+    ])
+    .toArray();
+
+  const ids = topProductIds.map((r) => r._id).filter(Boolean);
+  const popularDocs = ids.length
+    ? await products
+        .find({ _id: { $in: ids }, isActive: true, status: { $ne: "hidden" } })
+        .toArray()
+    : [];
+
+  // Preserve order
+  const idStrOrder = ids.map((i) => i.toString());
+  popularDocs.sort(
+    (a, b) => idStrOrder.indexOf(a._id.toString()) - idStrOrder.indexOf(b._id.toString())
+  );
+
+  // Recently purchased: latest successful orders (last 7 days, unique products)
+  const recentSince = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const recentProductIds = await orders
+    .aggregate<{ _id: ObjectId }>([
+      { $match: { status: "Success", timestamp: { $gte: recentSince } } },
+      { $group: { _id: "$productId" } },
+      { $limit: 10 },
+    ])
+    .toArray();
+
+  const recentIds = recentProductIds.map((r) => r._id).filter(Boolean);
+  const recentDocs = recentIds.length
+    ? await products
+        .find({ _id: { $in: recentIds }, isActive: true, status: { $ne: "hidden" } })
+        .toArray()
+    : [];
+
+  res.json({
+    popular: popularDocs.map(publicProduct),
+    recent: recentDocs.map(publicProduct),
+  });
+});
+
+// ── GET /feature-gates ─────────────────────────────────────────────────────
+
+const GATED_FEATURES = [
+  "referral",
+  "tier",
+  "mental_coin",
+  "mc_exchange",
+  "lucky_spin",
+  "leaderboard",
+  "achievements",
+  "daily_missions",
+  "weekly_missions",
+  "yearly_rewards",
+] as const;
+
+router.get("/feature-gates", async (_req: Request, res: Response) => {
+  const statusColl = await getCollection<SystemStatusDoc>("systemstatuses");
+  const users = await getCollection("users");
+
+  const [status, totalUsers] = await Promise.all([
+    statusColl.findOne({ _id: "global" }),
+    users.countDocuments({}),
+  ]);
+
+  const gateEnabled = status?.featureGateEnabled ?? true;
+  const target = status?.unlockTargetUsers ?? 500;
+  const unlocked = status?.manuallyUnlockedFeatures ?? [];
+  const locked = status?.manuallyLockedFeatures ?? [];
+
+  const allUnlocked = !gateEnabled || totalUsers >= target;
+
+  const gates: Record<string, boolean> = {};
+  for (const f of GATED_FEATURES) {
+    if (locked.includes(f)) {
+      gates[f] = false;
+    } else if (unlocked.includes(f)) {
+      gates[f] = true;
+    } else {
+      gates[f] = allUnlocked;
+    }
+  }
+
+  res.json({
+    totalUsers,
+    unlockTarget: target,
+    allUnlocked,
+    gates,
+  });
+});
+
+// ── GET /mc/config ─────────────────────────────────────────────────────────
+
+router.get("/mc/config", async (_req: Request, res: Response) => {
+  const statusColl = await getCollection<SystemStatusDoc>("systemstatuses");
+  const status = await statusColl.findOne({ _id: "global" });
+  res.json({
+    enabled: status?.mcRedeemEnabled ?? false,
+    exchangeRate: status?.mcExchangeRate ?? 1,
+    minRedeem: status?.mcMinRedeem ?? 500,
+    maxDiscountPct: status?.mcMaxDiscountPct ?? 20,
+  });
+});
+
+// ── POST /mc/exchange ──────────────────────────────────────────────────────
+// body: { mcAmount } — returns maxDiscount (KS) user would get
+
+router.post("/mc/exchange", async (req: Request, res: Response) => {
+  const u = asUser(req);
+  const body = req.body as { mcAmount?: number };
+  const mcAmount = Math.floor(Number(body.mcAmount) || 0);
+
+  if (mcAmount <= 0) {
+    return res.status(400).json({ error: "Invalid MC amount" });
+  }
+
+  const statusColl = await getCollection<SystemStatusDoc>("systemstatuses");
+  const status = await statusColl.findOne({ _id: "global" });
+
+  if (!status?.mcRedeemEnabled) {
+    return res.status(403).json({ error: "MC Exchange is not enabled" });
+  }
+  const minRedeem = status.mcMinRedeem ?? 500;
+  const exchangeRate = status.mcExchangeRate ?? 1;
+
+  if (mcAmount < minRedeem) {
+    return res.status(400).json({ error: `Minimum MC to redeem is ${minRedeem}` });
+  }
+  if (u.balanceCoin < mcAmount) {
+    return res.status(400).json({ error: "Insufficient Mental Coins" });
+  }
+
+  const ksDiscount = Math.floor(mcAmount * exchangeRate);
+  return res.json({ mcAmount, ksDiscount, exchangeRate });
 });
 
 export default router;

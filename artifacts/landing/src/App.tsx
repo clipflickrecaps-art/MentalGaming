@@ -18,6 +18,7 @@ import Support from "@/pages/Support";
 import AdminDashboard from "@/pages/AdminDashboard";
 import AdminOrders from "@/pages/AdminOrders";
 import AdminTopups from "@/pages/AdminTopups";
+import Notifications from "@/pages/Notifications";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient({
@@ -46,6 +47,7 @@ function Routes() {
       <Route path="/admin" component={AdminDashboard} />
       <Route path="/admin/orders" component={AdminOrders} />
       <Route path="/admin/topups" component={AdminTopups} />
+      <Route path="/notifications" component={Notifications} />
       <Route component={NotFound} />
     </Switch>
   );

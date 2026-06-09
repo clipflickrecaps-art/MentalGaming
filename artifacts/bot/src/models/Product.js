@@ -33,6 +33,17 @@ const productSchema = new mongoose.Schema(
     pricingMode: { type: String, enum: ['Auto', 'Manual'], default: 'Auto' },
     isApiEnabled: { type: Boolean, default: false },
     isActive:     { type: Boolean, default: true },
+
+    // ── Availability Status ───────────────────────────────────────────────────
+    // 'active'       → orderable
+    // 'out_of_stock' → visible, cannot order
+    // 'coming_soon'  → visible, disabled, shows "Coming Soon" badge
+    // 'hidden'       → not shown in mini app or shop listings
+    status: {
+      type:    String,
+      enum:    ['active', 'out_of_stock', 'coming_soon', 'hidden'],
+      default: 'active',
+    },
     imageUrl:     { type: String, default: null },
     description:  { type: String, default: '' },
 

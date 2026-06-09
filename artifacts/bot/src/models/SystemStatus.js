@@ -153,6 +153,80 @@ const systemStatusSchema = new mongoose.Schema(
       comment: 'Extra allowed IPs beyond the env-var WEBHOOK_ALLOWED_IPS list',
     },
 
+    // ── Feature Gate System ───────────────────────────────────────────────────
+    featureGateEnabled: {
+      type:    Boolean,
+      default: true,
+      comment: 'Master switch — when true, reward features are locked until unlockTargetUsers is reached',
+    },
+    unlockTargetUsers: {
+      type:    Number,
+      default: 500,
+      comment: 'Total user count required to auto-unlock reward features',
+    },
+    // Admin can manually override individual features before target is reached
+    manuallyUnlockedFeatures: {
+      type:    [String],
+      default: [],
+      comment: 'Feature IDs force-unlocked by admin regardless of user count',
+    },
+    manuallyLockedFeatures: {
+      type:    [String],
+      default: [],
+      comment: 'Feature IDs force-locked by admin regardless of user count',
+    },
+
+    // ── Mental Coin Exchange Config ───────────────────────────────────────────
+    mcRedeemEnabled: {
+      type:    Boolean,
+      default: false,
+      comment: 'Allow users to redeem MC as discount at checkout',
+    },
+    mcExchangeRate: {
+      type:    Number,
+      default: 1,
+      comment: '1 MC = N KS discount',
+    },
+    mcMinRedeem: {
+      type:    Number,
+      default: 500,
+      comment: 'Minimum MC required to redeem',
+    },
+    mcMaxDiscountPct: {
+      type:    Number,
+      default: 20,
+      comment: 'Maximum discount % per order from MC redemption',
+    },
+
+    // ── Review MC Reward ──────────────────────────────────────────────────────
+    reviewRewardEnabled: {
+      type:    Boolean,
+      default: false,
+      comment: 'Award MC coins when user submits a 4+ star review with comment',
+    },
+    reviewRewardAmount: {
+      type:    Number,
+      default: 50,
+      comment: 'MC coins awarded per qualifying review',
+    },
+
+    // ── Admin Group / Review Channel ──────────────────────────────────────────
+    adminGroupId: {
+      type:    String,
+      default: null,
+      comment: 'Telegram group ID for admin notifications',
+    },
+    reviewChannelId: {
+      type:    String,
+      default: null,
+      comment: 'Alias for feedbackChannelId — review destination channel',
+    },
+    supportUsername: {
+      type:    String,
+      default: null,
+      comment: '@username of support contact shown to users',
+    },
+
     // ── Meta ───────────────────────────────────────────────────────────────────
     updatedBy: { type: Number, default: null },
   },
