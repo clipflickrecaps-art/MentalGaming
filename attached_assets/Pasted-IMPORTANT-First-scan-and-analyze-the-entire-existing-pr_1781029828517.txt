@@ -1,0 +1,674 @@
+IMPORTANT:
+First scan and analyze the entire existing project before implementing anything.
+
+Check the current:
+- Telegram bot
+- Mini App
+- Admin Panel
+- API server
+- Database schema
+- Wallet system
+- Product system
+- Order system
+- Existing reward systems
+- Existing referral/tier/coin/spin features
+- Existing admin commands
+- Existing UI components
+
+Do NOT rebuild, duplicate, replace, or break any existing functionality.
+Do NOT remove existing working code.
+Do NOT reset user data.
+Only implement missing features and integrate them into the current architecture.
+
+If a similar feature already exists, extend it instead of creating a duplicate.
+
+==================================================
+PHASE 1: CORE SHOP, ADMIN, AND ORDER IMPROVEMENTS
+==================================================
+
+1. Promotion Banner System
+
+Implement a promotion banner system managed from the admin bot/admin panel.
+
+Admin must be able to:
+- Add banner
+- Edit banner
+- Delete banner
+- Enable banner
+- Disable banner
+- Set start date
+- Set end date
+- Set priority
+- Set target type
+
+Banner fields:
+- title
+- subtitle
+- image_url or uploaded image
+- target_type: shop, category, product, url, none
+- target_id
+- button_text
+- start_at
+- end_at
+- is_active
+- priority
+
+Mini App:
+- Show active banners on Home page
+- Support carousel/slider
+- Hide expired banners
+- Hide inactive banners
+- Open correct target when clicked
+
+2. Notification Center
+
+Implement notification center for users.
+
+Notification types:
+- Order completed
+- Order cancelled
+- Refund completed
+- New promotion
+- Reward unlocked
+- Review reward
+- System announcement
+
+Mini App:
+- Show bell icon
+- Show unread count
+- Show notification list
+- Mark notification as read
+
+Admin:
+- Can send announcement notification to all users
+
+3. Flash Sale System
+
+Implement flash sale system.
+
+Fields:
+- product_id
+- sale_price
+- original_price
+- start_at
+- end_at
+- stock_limit
+- is_active
+
+Mini App:
+- Show flash sale section
+- Show countdown timer
+- Hide expired flash sales
+- Disable order if stock limit reached
+
+4. Popular / Recently Purchased Products
+
+Implement:
+- Popular products section
+- Recently purchased section
+- Trending products based on completed order count
+
+5. Product Availability
+
+Add product status:
+- active
+- out_of_stock
+- coming_soon
+- hidden
+
+Mini App:
+- Active products can be ordered
+- Out of stock products cannot be ordered
+- Coming soon products are visible but disabled
+- Hidden products are not visible
+
+6. Admin Settings Page
+
+Add admin settings for:
+- Admin group ID
+- Review channel ID
+- Support username
+- Currency name
+- Maintenance mode
+- Feature unlock target users
+- Reward feature manual enable/disable
+- MC exchange rate
+- MC redeem limits
+- Referral reward
+- Review reward
+- Mission rewards
+
+7. Order Filters
+
+Admin order list must support:
+- Pending
+- Completed
+- Cancelled
+- Refunded
+- Search by order ID
+- Search by user
+- Search by product
+
+8. Refund Safety
+
+Refund actions must:
+- Ask confirmation before refund
+- Prevent duplicate refund
+- Log refund action
+- Notify user after refund
+
+9. Logs
+
+Implement logs:
+- Wallet change logs
+- Order action logs
+- Admin action logs
+- Reward logs
+
+==================================================
+PHASE 2: DYNAMIC PRODUCT FIELDS AND ADMIN ORDER DETAILS
+==================================================
+
+Implement Dynamic Product Required Fields System.
+
+Admin can configure required fields per product.
+
+Supported required fields:
+- Game ID
+- Server ID
+- UID
+- Email
+- Username
+- Character Name
+- Phone Number
+- Custom Text
+- Telegram username
+- Delivery note
+
+Examples:
+
+Mobile Legends product:
+- Game ID
+- Server ID
+
+Free Fire product:
+- UID
+
+Netflix product:
+- Email
+
+Custom service:
+- Custom Text
+
+Rules:
+- User must see only the fields required for that product.
+- Products that do not require Game ID / Server ID must not ask for them.
+- Submitted data must be stored with the order.
+- Admin must see submitted data in order notification and order detail page.
+
+Admin new order notification must include:
+- Order ID
+- Customer Telegram name
+- Customer username
+- Customer Telegram ID
+- Product name
+- Product preview/image if available
+- Price
+- Payment method
+- Submitted product fields:
+  - Game ID
+  - Server ID
+  - UID
+  - Email
+  - Username
+  - Character Name
+  - Phone Number
+  - Custom Text
+  - Telegram username
+  - Delivery note
+  - Any other configured field
+
+Admin order actions:
+- View details
+- Complete order
+- Cancel and refund
+- Message user
+- Warn user
+
+View Details must show full submitted information clearly.
+
+Sensitive fields:
+- User-facing views should mask password-like data
+- Admin-only order details can show required order data
+
+==================================================
+PHASE 3: POST ORDER REVIEW SYSTEM
+==================================================
+
+Implement automatic review flow after order completion.
+
+When admin completes an order:
+- Send order completed message to user
+- Add inline buttons:
+  - ⭐ Leave Review
+  - ❌ Skip Review
+
+Do not use normal reply keyboard for this review flow.
+Use inline buttons.
+
+If user clicks Skip Review:
+- Return user to main menu
+- Mark review as skipped
+
+If user clicks Leave Review:
+1. Ask user to select star rating from 1 to 5
+2. Ask user to write review message
+3. Save review
+4. Auto post review to configured review channel
+
+Review channel message must include:
+- Star rating
+- Review message
+- Product name
+- Product preview/image if available
+- Order ID
+- Customer display name
+- Customer username
+- Paid amount
+- Completed time
+- Review submitted time
+
+Admin settings:
+- Review channel ID
+- Enable/disable review system
+- Optional MC reward for review
+
+Rules:
+- One review per completed order
+- User cannot review cancelled/refunded orders
+- User cannot submit duplicate review for same order
+
+==================================================
+PHASE 4: FEATURE GATE SYSTEM
+==================================================
+
+Implement configurable Feature Unlock / Member Target Gate system.
+
+Reward-related features must remain locked for normal users until total bot users reach 500.
+
+Locked features:
+- Referral System
+- Tier System
+- Mental Coin System
+- MC Exchange
+- Lucky Spin
+- Leaderboard
+- Achievements
+- Daily Missions
+- Weekly Missions
+- Yearly Rewards
+
+Before 500 users:
+- Normal users see Coming Soon / Unlocks at 500 members
+- Locked features should not give rewards to normal users
+- UI can show progress:
+  Current members: X / 500
+
+Admin rules:
+- Admin users can always access and test all locked features before 500 users
+- Admin can manually enable each feature
+- Admin can manually disable each feature
+- Admin can force unlock reward features for all users before 500
+- Admin can change unlock target number from settings
+
+Auto unlock:
+- When total bot users reach 500, automatically unlock enabled reward features for all users.
+
+==================================================
+PHASE 5: TIER SYSTEM
+==================================================
+
+Implement Dual Tier System:
+- Lifetime Tier
+- Active Tier
+
+Lifetime Tier:
+- Based on lifetime total completed paid orders
+- Never decreases
+- Used as achievement/history
+
+Active Tier:
+- Based on yearly or last 365 days completed paid orders
+- Used for current benefits
+- Can decrease if yearly spending requirement is not maintained
+
+Tier thresholds:
+
+Bronze:
+- 0 KS to 500,000 KS
+
+Silver:
+- 500,000 KS to 2,000,000 KS
+
+Gold:
+- 2,000,000 KS to 6,000,000 KS
+
+Platinum:
+- 6,000,000 KS to 10,000,000 KS
+
+Diamond:
+- 10,000,000 KS+
+
+Tier MC bonus rates:
+
+Bronze:
+- 0.1% MC bonus
+
+Silver:
+- 0.3% MC bonus
+
+Gold:
+- 0.5% MC bonus
+
+Platinum:
+- 1% MC bonus
+
+Diamond:
+- 2% MC bonus
+
+Important:
+- Tier benefits are cumulative.
+- Higher tiers inherit all lower-tier privileges/features.
+- Percentage-based MC bonus must NOT stack.
+- Only the highest active tier MC bonus rate applies.
+
+Example:
+Diamond user gets Diamond MC bonus rate only: 2%.
+Do not calculate 0.1 + 0.3 + 0.5 + 1 + 2.
+
+Tier benefits:
+
+Bronze:
+- 0.1% MC bonus
+
+Silver:
+- Bronze benefits
+- 0.3% MC bonus
+
+Gold:
+- Silver benefits
+- 0.5% MC bonus
+- Priority support
+
+Platinum:
+- Gold benefits
+- 1% MC bonus
+- Exclusive flash sales
+
+Diamond:
+- Platinum benefits
+- 2% MC bonus
+- Birthday MC bonus
+- Special coupons
+- Early access promotions
+
+Mini App Profile page must show:
+- Lifetime Tier
+- Active Tier
+- Lifetime spend
+- Yearly / 365-day spend
+- Progress to next tier
+- Current MC bonus rate
+- Current benefits
+
+==================================================
+PHASE 6: MENTAL COIN SYSTEM AND MC EXCHANGE
+==================================================
+
+Implement Mental Coin as reward point system, not cash.
+
+MC earning sources:
+- Completed order spending
+- Tier bonus
+- Review reward
+- Referral reward
+- Lucky Spin reward
+- Achievement reward
+- Daily mission reward
+- Weekly mission reward
+- Admin manual adjustment
+
+MC spending:
+- Redeem MC as order discount
+- Exchange MC to KS discount
+- Use MC for coupons/promotions if enabled
+
+MC rules:
+- MC is stored in user wallet
+- Every MC transaction must be logged
+- Cancelled/refunded orders must not give MC
+- If order is refunded, earned MC from that order should be reversed or marked invalid
+- MC used in an order should not be refunded automatically unless admin allows it
+- Admin can manually add/remove MC with reason
+
+MC Exchange:
+- Admin configurable exchange rate
+- Example default:
+  1 MC = 1 KS discount
+- Minimum redeem amount configurable
+- Maximum discount per order configurable
+- Example:
+  Minimum redeem: 500 MC
+  Maximum discount per order: 20%
+
+Mini App:
+- Show MC balance
+- Show MC history
+- Show redeem option at checkout if enabled
+- Show exchange rules clearly
+
+Admin:
+- Configure MC earn rate
+- Configure exchange rate
+- Configure minimum redeem
+- Configure max discount
+- View MC logs
+
+==================================================
+PHASE 7: REFERRAL SYSTEM
+==================================================
+
+Implement Referral Dashboard and referral rewards.
+
+Referral rules:
+- Each user has unique referral code/link
+- New user can be linked to one referrer only
+- Referral reward is given only after referred user completes first paid order
+- Prevent self-referral
+- Prevent duplicate referral abuse
+
+Referral Dashboard:
+- Referral code
+- Referral link
+- Invited users count
+- Successful referrals count
+- Pending referrals count
+- Total earned MC
+- Copy/share button
+
+Referral rewards:
+- Referrer gets MC after referred user's first completed paid order
+- New user can receive welcome MC bonus if enabled
+- Referral rewards should be admin configurable
+- Tier-aware referral reward can be supported
+
+Admin:
+- Configure referral reward amount
+- Configure new user welcome bonus
+- Enable/disable referral system
+- View referral logs
+
+==================================================
+PHASE 8: LUCKY SPIN SYSTEM
+==================================================
+
+Implement Lucky Spin reward system.
+
+Access:
+- Locked until feature gate unlock unless admin
+- Admin can test anytime
+
+Spin rules:
+- Daily free spin configurable
+- Extra spin from missions/rewards if enabled
+- Prevent multiple free spins in same day unless allowed
+- Log every spin result
+
+Prize types:
+- MC reward
+- Coupon reward
+- Discount reward
+- Try again
+- No reward
+
+Default prize examples:
+- 5 MC
+- 10 MC
+- 20 MC
+- 50 MC
+- 100 MC
+- 5% discount coupon
+- Try Again
+
+Admin:
+- Configure prizes
+- Configure probabilities
+- Enable/disable lucky spin
+- View spin logs
+
+Mini App:
+- Show spin wheel
+- Show available spins
+- Show reward result
+- Add reward automatically to user wallet/coupon list
+
+==================================================
+PHASE 9: ACHIEVEMENTS, MISSIONS, LEADERBOARD, AND YEARLY SYSTEM
+==================================================
+
+Implement Achievement System.
+
+Achievement examples:
+- First Order
+- 5 Orders
+- 10 Orders
+- Spend 100,000 KS
+- Spend 500,000 KS
+- Invite 5 Friends
+- First Review
+- 7 Day Login
+- First Lucky Spin
+- Reach Silver Tier
+- Reach Gold Tier
+
+Each achievement:
+- Has title
+- Description
+- Requirement
+- Reward type
+- Reward amount
+- Claimed/unclaimed status
+
+Implement Daily Missions:
+- Login today
+- Complete 1 order
+- Spin lucky wheel
+- Write 1 review
+
+Implement Weekly Missions:
+- Complete 3 orders
+- Invite 1 friend
+- Login 7 days
+
+Implement Leaderboard:
+- Top spenders
+- Top MC earners
+- Top referrers
+- Weekly leaderboard
+- Monthly leaderboard
+- Yearly leaderboard
+
+Implement Yearly Progress System:
+- Yearly spending
+- Yearly orders
+- Yearly MC earned
+- Yearly referrals
+- Yearly leaderboard
+- Yearly summary
+
+Rules:
+- Lifetime data must never reset
+- Yearly progress can reset by year
+- Active Tier can be calculated by current year or last 365 days
+- Leaderboards should not expose private sensitive data
+- Show display name/username safely
+
+Admin:
+- Configure mission rewards
+- Configure achievement rewards
+- Enable/disable missions
+- Enable/disable leaderboard
+
+==================================================
+PHASE 10: FINAL INTEGRATION, TESTING, AND SAFETY
+==================================================
+
+After implementing all phases:
+
+1. Run full project check:
+- TypeScript errors
+- Build errors
+- Runtime errors
+- API errors
+- Bot command errors
+- Database migration errors
+
+2. Test flows:
+- User registration
+- Product browsing
+- Order creation
+- Dynamic product fields
+- Admin order notification
+- Complete order
+- Review flow
+- Review channel post
+- Refund flow
+- Promotion banner display
+- Feature gate lock/unlock
+- Admin force unlock
+- Tier calculation
+- MC earning
+- MC redeem
+- Referral reward
+- Lucky spin
+- Missions
+- Achievements
+- Leaderboard
+
+3. Safety rules:
+- Do not duplicate existing tables if similar tables already exist
+- Do not break current wallet balance
+- Do not reset user data
+- Do not remove existing admin commands
+- Do not expose sensitive user data publicly
+- Password-like fields should be masked in user-facing views
+- Admin-only views can show required order data
+
+4. Final deliverables:
+- Summary of implemented features
+- Files changed
+- Database migrations added
+- New admin commands
+- New mini app pages/components
+- New API endpoints
+- Test checklist
