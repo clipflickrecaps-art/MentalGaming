@@ -86,6 +86,7 @@ function loadCommands(bot) {
     'catalogAdmin.js',      // ← Catalog system + bulk product import
     'bannerAdmin.js',       // ← Promotion banner management (MANAGER+)
     'featureGate.js',       // ← Feature gate control panel (Owner/Manager)
+    'mcConfig.js',          // ← Mental Coin exchange & review reward config (Owner)
     'admin.js',
     'help.js',
     'ambient.js',           // ← LAST: catch-all ambient AI text handler
