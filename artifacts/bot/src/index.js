@@ -85,6 +85,7 @@ function loadCommands(bot) {
     'channelAutoPost.js',   // ← Channel auto-post scheduler (owner)
     'catalogAdmin.js',      // ← Catalog system + bulk product import
     'bannerAdmin.js',       // ← Promotion banner management (MANAGER+)
+    'featureGate.js',       // ← Feature gate control panel (Owner/Manager)
     'admin.js',
     'help.js',
     'ambient.js',           // ← LAST: catch-all ambient AI text handler
