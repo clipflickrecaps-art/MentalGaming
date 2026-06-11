@@ -207,9 +207,15 @@ module.exports = function registerShop(bot) {
         ],
       }]);
 
+      const botUsername = ctx.botInfo?.username;
+      const shareUrl   = botUsername
+        ? `https://t.me/share/url?url=${encodeURIComponent(`https://t.me/${botUsername}?start=product_${product._id}`)}&text=${encodeURIComponent(`🎮 ${product.name} — Mental Gaming Store`)}`
+        : null;
+
       await resolveMessage(ctx, ref, text, {
         ...Markup.inlineKeyboard([
           [Markup.button.callback(t(ctx, 'shop.order_now'), `order_start:${product._id}`)],
+          ...(shareUrl ? [[Markup.button.url('📤 Share', shareUrl)]] : []),
           Nav.backButton(),
         ]),
       });
