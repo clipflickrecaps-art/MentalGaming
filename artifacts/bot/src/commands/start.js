@@ -51,6 +51,30 @@ function buildInviteNotice(referrerName, welcomeKS, welcomeCoins) {
   );
 }
 
+// ── Build webAppConfig from SystemStatus + env ────────────────────────────────
+
+function resolveWebAppUrl(status) {
+  // DB override takes highest priority
+  if (status?.miniAppButtonUrl) return status.miniAppButtonUrl;
+  // Only use env-based URL if it's a production .replit.app domain
+  const domains = process.env.REPLIT_DOMAINS || '';
+  const prodDomain = domains.split(',').map(d => d.trim()).find(d => d.endsWith('.replit.app'));
+  if (prodDomain) return `https://${prodDomain}/`;
+  const explicit = process.env.MINI_APP_URL;
+  if (explicit) return explicit;
+  return null;
+}
+
+function buildWebAppConfig(status) {
+  const url = resolveWebAppUrl(status);
+  if (!url) return null;
+  return {
+    enabled: status?.miniAppButtonEnabled !== false,
+    url,
+    text: status?.miniAppButtonText || '🛍️ Mental Gaming Store',
+  };
+}
+
 // ── Module ────────────────────────────────────────────────────────────────────
 
 module.exports = function registerStart(bot) {
@@ -137,6 +161,10 @@ module.exports = function registerStart(bot) {
       return ctx.scene.enter('onboarding');
     }
 
+    // ── Load SystemStatus (needed for mini app button URL) ────────────────────
+    let sysStatus;
+    try { sysStatus = await SystemStatus.get(); } catch (_) { sysStatus = {}; }
+
     // ── Build single welcome panel with PERSISTENT REPLY KEYBOARD ────────────
     const isAdmin = Number(ctx.from.id) === Number(config.bot.adminId);
 
@@ -172,7 +200,7 @@ module.exports = function registerStart(bot) {
 
     return ctx.reply(panel, {
       parse_mode: 'Markdown',
-      ...(isAdmin ? adminMenuKeyboard() : mainMenuKeyboard(ctx)),
+      ...(isAdmin ? adminMenuKeyboard() : mainMenuKeyboard(ctx, buildWebAppConfig(sysStatus))),
     });
   });
 };
