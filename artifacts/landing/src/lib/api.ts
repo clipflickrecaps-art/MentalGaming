@@ -1,6 +1,6 @@
 import { initDataString } from "./telegram";
 
-const API_BASE = "/api/store";
+const API_BASE = (import.meta.env.VITE_API_URL ?? "") + "/api/store";
 
 export class ApiError extends Error {
   status: number;
