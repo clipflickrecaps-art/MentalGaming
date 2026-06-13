@@ -1,7 +1,8 @@
-import { useEffect } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Switch, Route, Router as WouterRouter } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { bootTelegram } from "@/lib/telegram";
+import WakeUpScreen from "@/components/WakeUpScreen";
 import Home from "@/pages/Home";
 import Shop from "@/pages/Shop";
 import ProductDetail from "@/pages/ProductDetail";
@@ -54,6 +55,9 @@ function Routes() {
 }
 
 export default function App() {
+  const [apiReady, setApiReady] = useState(false);
+  const handleReady = useCallback(() => setApiReady(true), []);
+
   useEffect(() => {
     document.documentElement.classList.add("dark");
     bootTelegram();
@@ -61,9 +65,12 @@ export default function App() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-        <Routes />
-      </WouterRouter>
+      {!apiReady && <WakeUpScreen onReady={handleReady} />}
+      {apiReady && (
+        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+          <Routes />
+        </WouterRouter>
+      )}
     </QueryClientProvider>
   );
 }
